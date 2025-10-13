@@ -29,6 +29,10 @@ const AdminPage = () => {
   const [selectedUnit, setSelectedUnit] = useState<Unit | null>(null);
   const [showPropertyDialog, setShowPropertyDialog] = useState(false);
   const [showUnitDialog, setShowUnitDialog] = useState(false);
+  const [showEditPropertyDialog, setShowEditPropertyDialog] = useState(false);
+  const [showEditUnitDialog, setShowEditUnitDialog] = useState(false);
+  const [editingProperty, setEditingProperty] = useState<Property | null>(null);
+  const [editingUnit, setEditingUnit] = useState<Unit | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [propertyImage, setPropertyImage] = useState<File | null>(null);
   const [propertyImagePreview, setPropertyImagePreview] = useState<string | null>(null);
@@ -480,6 +484,101 @@ const AdminPage = () => {
     }
   };
 
+  const handleEditProperty = (property: Property) => {
+    setEditingProperty(property);
+    setPropertyForm({
+      Properties: property.Properties || '',
+      AreaID: property.AreaID.toString(),
+      AddressID: property.AddressID.toString(),
+      PlusCode: property.PlusCode || '',
+      Images: property.Images || '',
+      Description: property.Description || ''
+    });
+    setPropertyImage(null);
+    setPropertyImagePreview(property.image_url || null);
+    setShowEditPropertyDialog(true);
+  };
+
+  const handleUpdateProperty = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingProperty) return;
+
+    setUploading(true);
+    try {
+      let imageUrl = editingProperty.image_url;
+
+      // Upload new image if one is selected
+      if (propertyImage) {
+        const fileName = generateFileName(propertyImage.name, 'property');
+        const filePath = `properties/${fileName}`;
+        const { error: uploadError } = await supabase.storage
+          .from('property-images')
+          .upload(filePath, propertyImage);
+
+        if (uploadError) {
+          throw uploadError;
+        }
+
+        const { data: { publicUrl } } = supabase.storage
+          .from('property-images')
+          .getPublicUrl(filePath);
+
+        imageUrl = publicUrl;
+      }
+
+      const updateData: any = {
+        Properties: propertyForm.Properties,
+        AreaID: parseInt(propertyForm.AreaID),
+        AddressID: parseInt(propertyForm.AddressID),
+        PlusCode: propertyForm.PlusCode,
+        Images: propertyForm.Images,
+        Description: propertyForm.Description
+      };
+
+      if (imageUrl) {
+        updateData.image_url = imageUrl;
+      }
+
+      const { error } = await supabase
+        .from('Properties')
+        .update(updateData)
+        .eq('PropertyID', editingProperty.PropertyID);
+
+      if (error) {
+        throw error;
+      }
+
+      setShowEditPropertyDialog(false);
+      setEditingProperty(null);
+      setPropertyForm({
+        Properties: '',
+        AreaID: '',
+        AddressID: '',
+        PlusCode: '',
+        Images: '',
+        Description: ''
+      });
+      setPropertyImage(null);
+      setPropertyImagePreview(null);
+
+      toast({
+        title: "Property Updated",
+        description: "The property has been successfully updated.",
+      });
+
+      fetchData();
+    } catch (error) {
+      console.error('Error updating property:', error);
+      toast({
+        title: "Error",
+        description: "Failed to update property.",
+        variant: "destructive",
+      });
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const handleDeleteUnit = async (unitId: number) => {
     try {
       const { error } = await supabase
@@ -827,7 +926,11 @@ const AdminPage = () => {
                     <Button variant="outline" size="sm">
                       <Eye className="h-4 w-4" />
                     </Button>
-                    <Button variant="outline" size="sm">
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={() => handleEditProperty(property)}
+                    >
                       <Edit className="h-4 w-4" />
                     </Button>
                     <AlertDialog>
@@ -857,6 +960,105 @@ const AdminPage = () => {
             </div>
           </CardContent>
         </Card>
+
+        {/* Edit Property Dialog */}
+        <Dialog open={showEditPropertyDialog} onOpenChange={setShowEditPropertyDialog}>
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Edit Property</DialogTitle>
+            </DialogHeader>
+            <form onSubmit={handleUpdateProperty} className="space-y-4 pr-2">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="editPropertyName">Property Name</Label>
+                  <Input
+                    id="editPropertyName"
+                    value={propertyForm.Properties}
+                    onChange={(e) => setPropertyForm(prev => ({ ...prev, Properties: e.target.value }))}
+                    placeholder="Property name"
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="editArea">Area</Label>
+                  <Select value={propertyForm.AreaID} onValueChange={(value) => setPropertyForm(prev => ({ ...prev, AreaID: value }))}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select area" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {areas.map((area) => (
+                        <SelectItem key={area.AreaID} value={area.AreaID.toString()}>
+                          {area.AreaName}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="editAddress">Address</Label>
+                <Select value={propertyForm.AddressID} onValueChange={(value) => setPropertyForm(prev => ({ ...prev, AddressID: value }))}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select address" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {addresses.map((address) => (
+                      <SelectItem key={address.AddressId} value={address.AddressId.toString()}>
+                        {address.Address}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="editPlusCode">Plus Code</Label>
+                <Input
+                  id="editPlusCode"
+                  value={propertyForm.PlusCode}
+                  onChange={(e) => setPropertyForm(prev => ({ ...prev, PlusCode: e.target.value }))}
+                  placeholder="9C4X+XF Bournemouth"
+                  required
+                />
+              </div>
+              <ImageUpload
+                onImageSelect={handlePropertyImageSelect}
+                onImageRemove={handlePropertyImageRemove}
+                selectedImage={propertyImage}
+                previewUrl={propertyImagePreview}
+                type="property"
+                disabled={uploading}
+              />
+              <div className="space-y-2">
+                <Label htmlFor="editImages">Additional Images (JSON array)</Label>
+                <Textarea
+                  id="editImages"
+                  value={propertyForm.Images}
+                  onChange={(e) => setPropertyForm(prev => ({ ...prev, Images: e.target.value }))}
+                  placeholder='["image1.jpg", "image2.jpg"]'
+                  rows={3}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="editDescription">Description</Label>
+                <Textarea
+                  id="editDescription"
+                  value={propertyForm.Description}
+                  onChange={(e) => setPropertyForm(prev => ({ ...prev, Description: e.target.value }))}
+                  placeholder="Property description (max 500 characters)"
+                  rows={3}
+                />
+              </div>
+              <div className="flex justify-end gap-2 pt-4 border-t">
+                <Button type="button" variant="outline" onClick={() => setShowEditPropertyDialog(false)} disabled={uploading}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={uploading}>
+                  {uploading ? "Updating..." : "Update Property"}
+                </Button>
+              </div>
+            </form>
+          </DialogContent>
+        </Dialog>
 
         {/* Units Section */}
         <Card className="shadow-medium border-none">
