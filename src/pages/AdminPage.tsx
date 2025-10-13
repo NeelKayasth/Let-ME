@@ -579,6 +579,101 @@ const AdminPage = () => {
     }
   };
 
+  const handleEditUnit = (unit: Unit) => {
+    setEditingUnit(unit);
+    setUnitForm({
+      PropertyID: unit.PropertyID.toString(),
+      UnitName: unit.UnitName || '',
+      MonthlyPrice: unit.MonthlyPrice.toString(),
+      Available: unit.Available,
+      Images: unit.Images || '',
+      Description: unit.Description || ''
+    });
+    setUnitImage(null);
+    setUnitImagePreview(unit.image_url || null);
+    setShowEditUnitDialog(true);
+  };
+
+  const handleUpdateUnit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingUnit) return;
+
+    setUploading(true);
+    try {
+      let imageUrl = editingUnit.image_url;
+
+      // Upload new image if one is selected
+      if (unitImage) {
+        const fileName = generateFileName(unitImage.name, 'unit');
+        const filePath = `units/${fileName}`;
+        const { error: uploadError } = await supabase.storage
+          .from('unit-images')
+          .upload(filePath, unitImage);
+
+        if (uploadError) {
+          throw uploadError;
+        }
+
+        const { data: { publicUrl } } = supabase.storage
+          .from('unit-images')
+          .getPublicUrl(filePath);
+
+        imageUrl = publicUrl;
+      }
+
+      const updateData: any = {
+        PropertyID: parseInt(unitForm.PropertyID),
+        UnitName: unitForm.UnitName,
+        MonthlyPrice: parseFloat(unitForm.MonthlyPrice),
+        Available: unitForm.Available,
+        Images: unitForm.Images,
+        Description: unitForm.Description
+      };
+
+      if (imageUrl) {
+        updateData.image_url = imageUrl;
+      }
+
+      const { error } = await supabase
+        .from('Units')
+        .update(updateData)
+        .eq('UnitID', editingUnit.UnitID);
+
+      if (error) {
+        throw error;
+      }
+
+      setShowEditUnitDialog(false);
+      setEditingUnit(null);
+      setUnitForm({
+        PropertyID: '',
+        UnitName: '',
+        MonthlyPrice: '',
+        Available: true,
+        Images: '',
+        Description: ''
+      });
+      setUnitImage(null);
+      setUnitImagePreview(null);
+
+      toast({
+        title: "Unit Updated",
+        description: "The unit has been successfully updated.",
+      });
+
+      fetchData();
+    } catch (error) {
+      console.error('Error updating unit:', error);
+      toast({
+        title: "Error",
+        description: "Failed to update unit.",
+        variant: "destructive",
+      });
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const handleDeleteUnit = async (unitId: number) => {
     try {
       const { error } = await supabase
@@ -1183,7 +1278,11 @@ const AdminPage = () => {
                     <Button variant="outline" size="sm">
                       <Eye className="h-4 w-4" />
                     </Button>
-                    <Button variant="outline" size="sm">
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={() => handleEditUnit(unit)}
+                    >
                       <Edit className="h-4 w-4" />
                     </Button>
                     <AlertDialog>
@@ -1213,6 +1312,107 @@ const AdminPage = () => {
             </div>
           </CardContent>
         </Card>
+
+        {/* Edit Unit Dialog */}
+        <Dialog open={showEditUnitDialog} onOpenChange={setShowEditUnitDialog}>
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Edit Unit</DialogTitle>
+            </DialogHeader>
+            <form onSubmit={handleUpdateUnit} className="space-y-4 pr-2">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="editUnitName">Unit Name</Label>
+                  <Input
+                    id="editUnitName"
+                    value={unitForm.UnitName}
+                    onChange={(e) => setUnitForm(prev => ({ ...prev, UnitName: e.target.value }))}
+                    placeholder="Flat 1, Unit A, etc."
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="editProperty">Property</Label>
+                  <Select value={unitForm.PropertyID} onValueChange={(value) => setUnitForm(prev => ({ ...prev, PropertyID: value }))}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select property" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {properties.map((property) => (
+                        <SelectItem key={property.PropertyID} value={property.PropertyID.toString()}>
+                          {property.Properties || `Property ${property.PropertyID}`}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="editMonthlyPrice">Monthly Price (£)</Label>
+                <Input
+                  id="editMonthlyPrice"
+                  type="number"
+                  value={unitForm.MonthlyPrice}
+                  onChange={(e) => setUnitForm(prev => ({ ...prev, MonthlyPrice: e.target.value }))}
+                  placeholder="820.00"
+                  step="0.01"
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="editAvailable">Availability</Label>
+                <Select 
+                  value={unitForm.Available.toString()} 
+                  onValueChange={(value) => setUnitForm(prev => ({ ...prev, Available: value === 'true' }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select availability" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="true">Available</SelectItem>
+                    <SelectItem value="false">Occupied</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <ImageUpload
+                onImageSelect={handleUnitImageSelect}
+                onImageRemove={handleUnitImageRemove}
+                selectedImage={unitImage}
+                previewUrl={unitImagePreview}
+                type="unit"
+                disabled={uploading}
+              />
+              <div className="space-y-2">
+                <Label htmlFor="editUnitImages">Additional Images (JSON array)</Label>
+                <Textarea
+                  id="editUnitImages"
+                  value={unitForm.Images}
+                  onChange={(e) => setUnitForm(prev => ({ ...prev, Images: e.target.value }))}
+                  placeholder='["image1.jpg", "image2.jpg"]'
+                  rows={3}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="editUnitDescription">Description</Label>
+                <Textarea
+                  id="editUnitDescription"
+                  value={unitForm.Description}
+                  onChange={(e) => setUnitForm(prev => ({ ...prev, Description: e.target.value }))}
+                  placeholder="Unit description (max 1000 characters)"
+                  rows={3}
+                />
+              </div>
+              <div className="flex justify-end gap-2 pt-4 border-t">
+                <Button type="button" variant="outline" onClick={() => setShowEditUnitDialog(false)} disabled={uploading}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={uploading}>
+                  {uploading ? "Updating..." : "Update Unit"}
+                </Button>
+              </div>
+            </form>
+          </DialogContent>
+        </Dialog>
           </>
         )}
       </main>
