@@ -975,12 +975,12 @@ const AdminPage = () => {
                     Add New Property
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                <DialogContent className="w-[95vw] sm:max-w-2xl max-h-[90vh] overflow-y-auto">
                   <DialogHeader>
                     <DialogTitle>Add New Property</DialogTitle>
                   </DialogHeader>
                   <div className="space-y-4 pr-2">
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label htmlFor="propertyName">Property Name</Label>
                         <Input
@@ -1074,8 +1074,8 @@ const AdminPage = () => {
           <CardContent>
             <div className="space-y-4">
               {properties.map((property) => (
-                <div key={property.PropertyID} className="flex items-center gap-4 p-4 border rounded-lg">
-                  <div className="w-20 h-20 rounded-lg overflow-hidden bg-muted flex-shrink-0">
+                <div key={property.PropertyID} className="flex flex-col sm:flex-row sm:items-center gap-4 p-4 border rounded-lg">
+                  <div className="w-full sm:w-20 h-40 sm:h-20 rounded-lg overflow-hidden bg-muted flex-shrink-0">
                     <img
                       src={getImageUrl(property.image_url, 'property')}
                       alt={property.Properties || `Property ${property.PropertyID}`}
@@ -1087,7 +1087,7 @@ const AdminPage = () => {
                     <p className="text-sm text-muted-foreground">{property.addresses?.Address}</p>
                     <p className="text-sm text-muted-foreground">{property.areas?.AreaName}</p>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap justify-end sm:justify-start gap-2 w-full sm:w-auto">
                     <Button variant="outline" size="sm" onClick={() => handleViewProperty(property)}>
                       <Eye className="h-4 w-4" />
                     </Button>
@@ -1148,7 +1148,7 @@ const AdminPage = () => {
 
         {/* View Property Dialog */}
         <Dialog open={showViewPropertyDialog} onOpenChange={setShowViewPropertyDialog}>
-          <DialogContent className="max-w-xl">
+          <DialogContent className="w-[95vw] sm:max-w-xl">
             <DialogHeader>
               <DialogTitle>{viewProperty?.Properties || 'Property'}</DialogTitle>
             </DialogHeader>
@@ -1166,7 +1166,7 @@ const AdminPage = () => {
 
         {/* View Unit Dialog */}
         <Dialog open={showViewUnitDialog} onOpenChange={setShowViewUnitDialog}>
-          <DialogContent className="max-w-xl">
+          <DialogContent className="w-[95vw] sm:max-w-xl">
             <DialogHeader>
               <DialogTitle>{viewUnit?.UnitName || 'Unit'}</DialogTitle>
             </DialogHeader>
@@ -1184,12 +1184,12 @@ const AdminPage = () => {
 
         {/* Edit Property Dialog */}
         <Dialog open={showEditPropertyDialog} onOpenChange={setShowEditPropertyDialog}>
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogContent className="w-[95vw] sm:max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Edit Property</DialogTitle>
             </DialogHeader>
             <form onSubmit={handleUpdateProperty} className="space-y-4 pr-2">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="editPropertyName">Property Name</Label>
                   <Input
@@ -1296,12 +1296,12 @@ const AdminPage = () => {
                     Add Unit
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                <DialogContent className="w-[95vw] sm:max-w-2xl max-h-[90vh] overflow-y-auto">
                   <DialogHeader>
                     <DialogTitle>Add New Unit</DialogTitle>
                   </DialogHeader>
                   <div className="space-y-4 pr-2">
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label htmlFor="unitName">Unit Name</Label>
                         <Input
@@ -1382,8 +1382,8 @@ const AdminPage = () => {
           <CardContent>
             <div className="space-y-4">
               {units.map((unit) => (
-                <div key={unit.UnitID} className="flex items-center gap-4 p-4 border rounded-lg">
-                  <div className="w-20 h-20 rounded-lg overflow-hidden bg-muted flex-shrink-0">
+                <div key={unit.UnitID} className="flex flex-col sm:flex-row sm:items-center gap-4 p-4 border rounded-lg">
+                  <div className="w-full sm:w-20 h-40 sm:h-20 rounded-lg overflow-hidden bg-muted flex-shrink-0">
                     <img
                       src={getImageUrl(unit.image_url, 'unit')}
                       alt={unit.UnitName}
@@ -1400,7 +1400,7 @@ const AdminPage = () => {
                       </Badge>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap justify-end sm:justify-start gap-2 w-full sm:w-auto">
                     <Button variant="outline" size="sm" onClick={() => handleViewUnit(unit)}>
                       <Eye className="h-4 w-4" />
                     </Button>
@@ -1441,12 +1441,12 @@ const AdminPage = () => {
 
         {/* Edit Unit Dialog */}
         <Dialog open={showEditUnitDialog} onOpenChange={setShowEditUnitDialog}>
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogContent className="w-[95vw] sm:max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Edit Unit</DialogTitle>
             </DialogHeader>
             <form onSubmit={handleUpdateUnit} className="space-y-4 pr-2">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="editUnitName">Unit Name</Label>
                   <Input

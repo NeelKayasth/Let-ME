@@ -157,15 +157,21 @@ const YeovilPage = () => {
                                 </>
                               )}
                             </div>
-                            <Link to={`/property/${property.PropertyID}`}>
-                              <Button 
-                                size="lg"
-                                className="shadow-soft hover:shadow-medium transition-all"
-                              >
-                                View Units
-                                <ArrowRight className="ml-2 h-4 w-4" />
+                            {property.availableCount && property.availableCount > 0 ? (
+                              <Link to={`/property/${property.PropertyID}`}>
+                                <Button 
+                                  size="lg"
+                                  className="shadow-soft hover:shadow-medium transition-all"
+                                >
+                                  View Units
+                                  <ArrowRight className="ml-2 h-4 w-4" />
+                                </Button>
+                              </Link>
+                            ) : (
+                              <Button size="lg" variant="outline" disabled className="opacity-60 cursor-not-allowed">
+                                No units available
                               </Button>
-                            </Link>
+                            )}
                           </div>
                         </CardContent>
                       </Card>
