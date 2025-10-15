@@ -6,11 +6,11 @@ import { Badge } from "@/components/ui/badge";
 import { MapPin, Home, ArrowRight } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useState, useEffect } from "react";
-import { supabase, Property } from "@/lib/supabase";
+import { supabase, Property, Unit } from "@/lib/supabase";
 import { getImageUrl } from "@/lib/imageUtils";
 
 const PortsmouthPage = () => {
-  const [properties, setProperties] = useState<Property[]>([]);
+  const [properties, setProperties] = useState<(Property & { units?: Unit[]; availableCount?: number; minPrice?: number; maxPrice?: number })[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -21,14 +21,32 @@ const PortsmouthPage = () => {
           .select(`
             *,
             areas:AreaID (AreaName),
-            addresses:AddressID (Address)
+            addresses:AddressID (Address),
+            units:Units (*)
           `)
           .eq('AreaID', 5); // Portsmouth area ID
 
         if (error) {
           console.error('Error fetching properties:', error);
         } else {
-          setProperties(data || []);
+          const computed = (data || []).map((p: any) => {
+            const units: Unit[] = (p.units || []) as Unit[];
+            const availableUnits = units.filter(u => u.Available);
+            const availableCount = availableUnits.length;
+            const prices = availableUnits.map(u => u.MonthlyPrice);
+            const minPrice = prices.length ? Math.min(...prices) : undefined;
+            const maxPrice = prices.length ? Math.max(...prices) : undefined;
+            return { ...p, units, availableCount, minPrice, maxPrice };
+          }).sort((a: any, b: any) => {
+            const aCount = a.availableCount || 0;
+            const bCount = b.availableCount || 0;
+            if (bCount !== aCount) return bCount - aCount;
+            const aMin = a.minPrice ?? Number.POSITIVE_INFINITY;
+            const bMin = b.minPrice ?? Number.POSITIVE_INFINITY;
+            if (aMin !== bMin) return aMin - bMin;
+            return (a.Properties || '').localeCompare(b.Properties || '');
+          });
+          setProperties(computed);
         }
       } catch (error) {
         console.error('Error:', error);
@@ -95,11 +113,13 @@ const PortsmouthPage = () => {
                               e.currentTarget.src = getImageUrl(null, 'property');
                             }}
                           />
-                          <div className="absolute top-4 right-4">
-                            <Badge className="bg-accent text-accent-foreground shadow-medium">
-                              Available
-                            </Badge>
-                          </div>
+                          {(property.availableCount || 0) > 0 && (
+                            <div className="absolute top-4 right-4">
+                              <Badge className="bg-accent text-accent-foreground shadow-medium">
+                                {property.availableCount} Available
+                              </Badge>
+                            </div>
+                          )}
                         </div>
                         
                         <CardContent className="p-6 space-y-4">
@@ -121,8 +141,21 @@ const PortsmouthPage = () => {
 
                           <div className="flex items-center justify-between pt-4 border-t border-border">
                             <div>
-                              <p className="text-sm text-muted-foreground">Properties in this building</p>
-                              <p className="text-lg font-bold text-primary">Multiple Units</p>
+                              {property.availableCount && property.availableCount > 0 ? (
+                                <>
+                                  <p className="text-sm text-muted-foreground">Available units</p>
+                                  <p className="text-lg font-bold text-primary">
+                                    {property.minPrice === property.maxPrice || property.maxPrice === undefined
+                                      ? `£${property.minPrice}`
+                                      : `£${property.minPrice} - £${property.maxPrice}`}
+                                  </p>
+                                </>
+                              ) : (
+                                <>
+                                  <p className="text-sm text-muted-foreground">No units available</p>
+                                  <p className="text-lg font-bold text-muted-foreground">—</p>
+                                </>
+                              )}
                             </div>
                             <Link to={`/property/${property.PropertyID}`}>
                               <Button 

@@ -95,9 +95,33 @@ const ApplicationPage = () => {
         throw error;
       }
 
-      // Send email notification (this would be handled by a backend service)
-      // For now, we'll just show a success message
-      
+      // Send email notification via Netlify serverless function
+      try {
+        const response = await fetch('/.netlify/functions/send-application-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            propertyName: property?.Properties || `Property ${property?.PropertyID}`,
+            unitName: unit?.UnitName,
+            areaName: property?.areas?.AreaName,
+            address: property?.addresses?.Address,
+            monthlyPrice: unit?.MonthlyPrice,
+            applicantName: formData.applicantName,
+            email: formData.email,
+            phone: formData.phone,
+            dateOfBirth: formData.dateOfBirth,
+            currentAddress: formData.currentAddress,
+            employmentStatus: formData.employmentStatus,
+            monthlyIncome: formData.monthlyIncome,
+          }),
+        });
+        if (!response.ok) {
+          console.error('Email send failed');
+        }
+      } catch (err) {
+        console.error('Email send error:', err);
+      }
+
       toast({
         title: "Application Submitted Successfully",
         description: "Thank you for your application. We'll be in touch soon!",
