@@ -33,6 +33,11 @@ const AdminPage = () => {
   const [showEditUnitDialog, setShowEditUnitDialog] = useState(false);
   const [editingProperty, setEditingProperty] = useState<Property | null>(null);
   const [editingUnit, setEditingUnit] = useState<Unit | null>(null);
+  const [cascadeConfirm, setCascadeConfirm] = useState<{ open: boolean; property: Property | null; unitsCount: number }>({ open: false, property: null, unitsCount: 0 });
+  const [viewProperty, setViewProperty] = useState<Property | null>(null);
+  const [viewUnit, setViewUnit] = useState<Unit | null>(null);
+  const [showViewPropertyDialog, setShowViewPropertyDialog] = useState(false);
+  const [showViewUnitDialog, setShowViewUnitDialog] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [propertyImage, setPropertyImage] = useState<File | null>(null);
   const [propertyImagePreview, setPropertyImagePreview] = useState<string | null>(null);
@@ -476,12 +481,77 @@ const AdminPage = () => {
       fetchData();
     } catch (error) {
       console.error('Error deleting property:', error);
-      toast({
-        title: "Error",
-        description: "Failed to delete property.",
-        variant: "destructive",
-      });
+      // If foreign key violation, prompt for cascade delete
+      const message = error instanceof Error ? error.message : '';
+      if (message.includes('foreign key') || message.includes('violates foreign key') || message.includes('violates row-level security policy') || message.includes('23503')) {
+        // Try to fetch number of units for the property
+        const { count } = await supabase
+          .from('Units')
+          .select('UnitID', { count: 'exact', head: true })
+          .eq('PropertyID', propertyId);
+        setCascadeConfirm({ open: true, property: properties.find(p => p.PropertyID === propertyId) || null, unitsCount: count || 0 });
+        toast({
+          title: 'Property has related units',
+          description: 'This property has units attached. You can delete the property along with all its units.',
+          variant: 'destructive'
+        });
+      } else {
+        toast({
+          title: "Error",
+          description: "Failed to delete property.",
+          variant: "destructive",
+        });
+      }
     }
+  };
+
+  const confirmDeleteProperty = async (property: Property) => {
+    // Check if units exist
+    const { count } = await supabase
+      .from('Units')
+      .select('UnitID', { count: 'exact', head: true })
+      .eq('PropertyID', property.PropertyID);
+    if ((count || 0) > 0) {
+      setCascadeConfirm({ open: true, property, unitsCount: count || 0 });
+      return;
+    }
+    await handleDeleteProperty(property.PropertyID);
+  };
+
+  const handleCascadeDeleteProperty = async () => {
+    if (!cascadeConfirm.property) return;
+    try {
+      // Delete units first
+      const { error: unitsError } = await supabase
+        .from('Units')
+        .delete()
+        .eq('PropertyID', cascadeConfirm.property.PropertyID);
+      if (unitsError) throw unitsError;
+
+      // Delete property
+      const { error: propError } = await supabase
+        .from('Properties')
+        .delete()
+        .eq('PropertyID', cascadeConfirm.property.PropertyID);
+      if (propError) throw propError;
+
+      setCascadeConfirm({ open: false, property: null, unitsCount: 0 });
+      toast({ title: 'Deleted', description: 'Property and all related units have been deleted.' });
+      fetchData();
+    } catch (err) {
+      console.error('Cascade delete error:', err);
+      toast({ title: 'Error', description: 'Failed to delete property and its units.', variant: 'destructive' });
+    }
+  };
+
+  const handleViewProperty = (property: Property) => {
+    setViewProperty(property);
+    setShowViewPropertyDialog(true);
+  };
+
+  const handleViewUnit = (unit: Unit) => {
+    setViewUnit(unit);
+    setShowViewUnitDialog(true);
   };
 
   const handleEditProperty = (property: Property) => {
@@ -1018,7 +1088,7 @@ const AdminPage = () => {
                     <p className="text-sm text-muted-foreground">{property.areas?.AreaName}</p>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Button variant="outline" size="sm">
+                    <Button variant="outline" size="sm" onClick={() => handleViewProperty(property)}>
                       <Eye className="h-4 w-4" />
                     </Button>
                     <Button 
@@ -1038,12 +1108,12 @@ const AdminPage = () => {
                         <AlertDialogHeader>
                           <AlertDialogTitle>Are you sure you want to delete this property?</AlertDialogTitle>
                           <AlertDialogDescription>
-                            This action cannot be undone. This will permanently delete the property and all its units.
+                            If this property has related units, deletion will fail. You can choose to delete the property along with all its units in the next step.
                           </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
                           <AlertDialogCancel>Cancel</AlertDialogCancel>
-                          <AlertDialogAction onClick={() => handleDeleteProperty(property.PropertyID)}>
+                          <AlertDialogAction onClick={() => confirmDeleteProperty(property)}>
                             Delete
                           </AlertDialogAction>
                         </AlertDialogFooter>
@@ -1055,6 +1125,62 @@ const AdminPage = () => {
             </div>
           </CardContent>
         </Card>
+
+        {/* Cascade delete confirmation */}
+        <AlertDialog open={cascadeConfirm.open} onOpenChange={(open) => setCascadeConfirm(prev => ({ ...prev, open }))}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete property and all related units?</AlertDialogTitle>
+              <AlertDialogDescription>
+                {cascadeConfirm.property ? (
+                  <>
+                    The property "{cascadeConfirm.property.Properties}" has {cascadeConfirm.unitsCount} related units. This action will permanently delete the property and all its units. This cannot be undone.
+                  </>
+                ) : null}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={handleCascadeDeleteProperty}>Delete All</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* View Property Dialog */}
+        <Dialog open={showViewPropertyDialog} onOpenChange={setShowViewPropertyDialog}>
+          <DialogContent className="max-w-xl">
+            <DialogHeader>
+              <DialogTitle>{viewProperty?.Properties || 'Property'}</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3">
+              <div className="w-full h-56 rounded overflow-hidden bg-muted">
+                <img src={getImageUrl(viewProperty?.image_url, 'property')} alt={viewProperty?.Properties || 'Property'} className="w-full h-full object-cover" />
+              </div>
+              <p className="text-sm">Area: {viewProperty?.areas?.AreaName}</p>
+              <p className="text-sm">Address: {viewProperty?.addresses?.Address}</p>
+              <p className="text-sm">Plus Code: {viewProperty?.PlusCode}</p>
+              <p className="text-sm">Description: {viewProperty?.Description}</p>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* View Unit Dialog */}
+        <Dialog open={showViewUnitDialog} onOpenChange={setShowViewUnitDialog}>
+          <DialogContent className="max-w-xl">
+            <DialogHeader>
+              <DialogTitle>{viewUnit?.UnitName || 'Unit'}</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3">
+              <div className="w-full h-56 rounded overflow-hidden bg-muted">
+                <img src={getImageUrl(viewUnit?.image_url, 'unit')} alt={viewUnit?.UnitName || 'Unit'} className="w-full h-full object-cover" />
+              </div>
+              <p className="text-sm">Property: {viewUnit?.properties?.Properties || `Property ${viewUnit?.PropertyID}`}</p>
+              <p className="text-sm">Monthly Price: £{viewUnit?.MonthlyPrice?.toLocaleString?.() || viewUnit?.MonthlyPrice}</p>
+              <p className="text-sm">Status: {viewUnit?.Available ? 'Available' : 'Occupied'}</p>
+              <p className="text-sm">Description: {viewUnit?.Description}</p>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         {/* Edit Property Dialog */}
         <Dialog open={showEditPropertyDialog} onOpenChange={setShowEditPropertyDialog}>
@@ -1275,7 +1401,7 @@ const AdminPage = () => {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Button variant="outline" size="sm">
+                    <Button variant="outline" size="sm" onClick={() => handleViewUnit(unit)}>
                       <Eye className="h-4 w-4" />
                     </Button>
                     <Button 
