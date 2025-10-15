@@ -168,9 +168,7 @@ const ChristchurchPage = () => {
                                 </Button>
                               </Link>
                             ) : (
-                              <Button size="lg" variant="outline" disabled className="opacity-60 cursor-not-allowed">
-                                No units available
-                              </Button>
+                              <></>
                             )}
                           </div>
                         </CardContent>
