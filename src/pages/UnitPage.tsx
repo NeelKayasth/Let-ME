@@ -115,7 +115,7 @@ const UnitPage = () => {
                 {unit.UnitName}
               </h1>
               
-              <div className="flex items-center gap-4 text-primary-foreground/90">
+              <div className="flex items-center gap-4 text-primary-foreground/90 flex-wrap">
                 <div className="flex items-center gap-2">
                   <MapPin className="h-5 w-5" />
                   <span>{property.addresses?.Address}</span>
@@ -124,6 +124,16 @@ const UnitPage = () => {
                   <span className="text-2xl font-bold">£{unit.MonthlyPrice.toLocaleString()}</span>
                   <span className="text-sm">/month</span>
                 </div>
+                <a
+                  href={property.PlusCode && property.PlusCode.startsWith('http')
+                    ? property.PlusCode
+                    : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(property.addresses?.Address || '')}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs md:text-sm bg-white/20 px-3 py-1 rounded-full hover:bg-white/30 transition-colors"
+                >
+                  {property.PlusCode && !property.PlusCode.startsWith('http') ? property.PlusCode : 'Open in Google Maps'}
+                </a>
               </div>
 
               {unit.Description && (

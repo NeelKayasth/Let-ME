@@ -1,5 +1,4 @@
 import Navigation from "@/components/Navigation";
-import MobileBackBar from "@/components/MobileBackBar";
 import Footer from "@/components/Footer";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -52,7 +51,6 @@ const Index = () => {
   return (
     <div className="min-h-screen">
       <Navigation />
-      <MobileBackBar />
       
       <main>
         {/* Hero Section */}
@@ -103,11 +101,7 @@ const Index = () => {
             </div>
           </div>
 
-          <div className="absolute bottom-0 left-0 right-0 z-10">
-            <svg viewBox="0 0 1200 120" className="w-full h-20 fill-background drop-shadow-2xl">
-              <path d="M0,60 C300,100 900,20 1200,60 L1200,120 L0,120 Z"></path>
-            </svg>
-          </div>
+          {/* Decorative wave removed on mobile to avoid thin white strip */}
         </section>
 
         {/* Areas Section */}

@@ -103,7 +103,11 @@ const YeovilPage = () => {
                     {properties.map((property) => (
                       <Card 
                         key={property.PropertyID} 
-                        className="overflow-hidden shadow-medium hover:shadow-large transition-all duration-300 hover:scale-105 border-none"
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => (window.location.href = `/property/${property.PropertyID}`)}
+                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { (window.location.href = `/property/${property.PropertyID}`); } }}
+                        className="overflow-hidden shadow-medium border-none hover-outline cursor-pointer"
                       >
                         <div className="relative h-40 md:h-64 overflow-hidden">
                           <img

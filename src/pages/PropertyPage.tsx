@@ -113,18 +113,21 @@ const PropertyPage = () => {
                 {property.Properties || `Property ${property.PropertyID}`}
               </h1>
               
-              <div className="flex items-center gap-4 text-primary-foreground/90">
+              <div className="flex items-center gap-4 text-primary-foreground/90 flex-wrap">
                 <div className="flex items-center gap-2">
                   <MapPin className="h-5 w-5" />
                   <span>{property.addresses?.Address}</span>
                 </div>
-                {property.PlusCode && (
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm bg-white/20 px-3 py-1 rounded-full">
-                      {property.PlusCode}
-                    </span>
-                  </div>
-                )}
+                <a
+                  href={property.PlusCode && property.PlusCode.startsWith('http')
+                    ? property.PlusCode
+                    : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(property.addresses?.Address || '')}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm bg-white/20 px-3 py-1 rounded-full hover:bg-white/30 transition-colors"
+                >
+                  {property.PlusCode && !property.PlusCode.startsWith('http') ? property.PlusCode : 'Open in Google Maps'}
+                </a>
               </div>
 
               {property.Description && (
@@ -189,7 +192,11 @@ const PropertyPage = () => {
                   {units.map((unit) => (
                     <Card 
                       key={unit.UnitID} 
-                      className="overflow-hidden shadow-medium hover:shadow-large transition-all duration-300 hover:scale-105 border-none"
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => (window.location.href = `/apply/${unit.UnitID}`)}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { (window.location.href = `/apply/${unit.UnitID}`); } }}
+                      className="overflow-hidden shadow-medium border-none hover-outline cursor-pointer"
                     >
                       <div className="relative h-40 md:h-64 overflow-hidden">
                         <img

@@ -1,8 +1,10 @@
 import { ChevronLeft } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 
 const MobileBackBar = () => {
   const navigate = useNavigate();
+  const { pathname } = useLocation();
+  if (pathname === "/") return null;
   return (
     <div className="sm:hidden sticky top-0 z-30 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/75 border-b border-border">
       <div className="container mx-auto px-4 py-2">

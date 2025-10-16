@@ -102,6 +102,55 @@ All colors MUST be HSL.
   }
 }
 
+@layer utilities {
+  @keyframes glow-border {
+    0% { box-shadow: 0 0 0 0 hsl(45 95% 55% / 0.0), inset 0 0 0 0 hsl(45 95% 55% / 0.0); }
+    50% { box-shadow: 0 0 0 2px hsl(45 95% 55% / 0.25), inset 0 0 12px 0 hsl(45 95% 55% / 0.15); }
+    100% { box-shadow: 0 0 0 0 hsl(45 95% 55% / 0.0), inset 0 0 0 0 hsl(45 95% 55% / 0.0); }
+  }
+
+  .hover-glow {
+    transition: var(--transition-smooth);
+  }
+  .hover-glow:hover {
+    animation: glow-border 1.6s ease-in-out infinite;
+    box-shadow: 0 0 0 2px hsl(45 95% 55% / 0.35), var(--shadow-medium);
+    transform: none !important;
+  }
+  .hover-glow:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px hsl(45 95% 55% / 0.55), var(--shadow-medium);
+  }
+
+  @keyframes shimmer-border {
+    0% { background-position: 0 0, 0 0; }
+    100% { background-position: 200% 0, 0 0; }
+  }
+  .hover-outline {
+    position: relative;
+    border-radius: var(--radius);
+  }
+  .hover-outline::after {
+    content: "";
+    position: absolute;
+    inset: -1px;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(90deg, hsl(45 95% 70%), hsl(45 95% 55%), hsl(45 95% 70%)) 0 0 / 200% 100% no-repeat;
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+            mask-composite: exclude;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .25s ease;
+  }
+  .hover-outline:hover::after,
+  .hover-outline:focus-visible::after {
+    opacity: 1;
+    animation: shimmer-border 1.8s linear infinite;
+  }
+}
+
 @layer base {
   * {
     @apply border-border;

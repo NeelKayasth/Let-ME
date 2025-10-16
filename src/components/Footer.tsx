@@ -1,14 +1,17 @@
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Facebook, Instagram, Linkedin, Mail, Phone, MapPin } from "lucide-react";
 import logo from "@/assets/letme-logo.png";
 
 const Footer = () => {
+  const navigate = useNavigate();
   const quickLinks = [
     { name: "Home", href: "/", isRoute: true },
-    { name: "Rooms", href: "/rooms", isRoute: true },
-    { name: "Flexible Accommodation", href: "/flexible-accommodation", isRoute: true },
-    { name: "Pay Rent", href: "/pay-rent", isRoute: true },
-    { name: "Contact Us", href: "#contact", isRoute: false },
+    { name: "Bournemouth & Poole", href: "/bournemouth-poole", isRoute: true },
+    { name: "Christchurch", href: "/christchurch", isRoute: true },
+    { name: "Yeovil", href: "/yeovil", isRoute: true },
+    { name: "Weymouth", href: "/weymouth", isRoute: true },
+    { name: "Portsmouth", href: "/portsmouth", isRoute: true },
+    { name: "Contact", href: "/contact", isRoute: true },
   ];
 
   const locations = [
@@ -64,21 +67,16 @@ const Footer = () => {
             <ul className="space-y-2">
               {quickLinks.map((link) => (
                 <li key={link.name}>
-                  {link.isRoute ? (
-                    <Link 
-                      to={link.href}
-                      className="text-background/80 hover:text-background transition-colors"
-                    >
-                      {link.name}
-                    </Link>
-                  ) : (
-                    <a 
-                      href={link.href}
-                      className="text-background/80 hover:text-background transition-colors"
-                    >
-                      {link.name}
-                    </a>
-                  )}
+                  <button
+                    onClick={() => {
+                      navigate(link.href);
+                      // ensure scroll to top
+                      requestAnimationFrame(() => window.scrollTo({ top: 0, left: 0, behavior: 'instant' as ScrollBehavior }));
+                    }}
+                    className="text-left text-background/80 hover:text-background transition-colors"
+                  >
+                    {link.name}
+                  </button>
                 </li>
               ))}
             </ul>

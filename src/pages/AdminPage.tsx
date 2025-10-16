@@ -973,13 +973,14 @@ const AdminPage = () => {
                       </Select>
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="plusCode">Google Plus Code</Label>
+                      <Label htmlFor="plusCode">Google Maps Link (or Plus Code)</Label>
                       <Input
                         id="plusCode"
                         value={propertyForm.PlusCode}
                         onChange={(e) => setPropertyForm(prev => ({ ...prev, PlusCode: e.target.value }))}
-                        placeholder="JG5W+PG Weymouth"
+                        placeholder="https://maps.google.com/... or 9C4X+XF Bournemouth"
                       />
+                      <p className="text-xs text-muted-foreground">Paste a Google Maps URL for this property. Plus Code also accepted.</p>
                     </div>
                     <ImageUpload
                       onImageSelect={handlePropertyImageSelect}
@@ -1109,7 +1110,16 @@ const AdminPage = () => {
               </div>
               <p className="text-sm">Area: {viewProperty?.areas?.AreaName}</p>
               <p className="text-sm">Address: {viewProperty?.addresses?.Address}</p>
-              <p className="text-sm">Plus Code: {viewProperty?.PlusCode}</p>
+              <p className="text-sm">Map: {viewProperty?.PlusCode ? (
+                <a
+                  href={viewProperty.PlusCode.startsWith('http') ? viewProperty.PlusCode : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(viewProperty.addresses?.Address || '')}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline"
+                >
+                  Open in Google Maps
+                </a>
+              ) : '—'}</p>
               <p className="text-sm">Description: {viewProperty?.Description}</p>
             </div>
           </DialogContent>
@@ -1183,14 +1193,15 @@ const AdminPage = () => {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="editPlusCode">Plus Code</Label>
+                <Label htmlFor="editPlusCode">Google Maps Link (or Plus Code)</Label>
                 <Input
                   id="editPlusCode"
                   value={propertyForm.PlusCode}
                   onChange={(e) => setPropertyForm(prev => ({ ...prev, PlusCode: e.target.value }))}
-                  placeholder="9C4X+XF Bournemouth"
+                  placeholder="https://maps.google.com/... or 9C4X+XF Bournemouth"
                   required
                 />
+                <p className="text-xs text-muted-foreground">Store a Google Maps URL here for map navigation. Plus Codes are also supported.</p>
               </div>
               <ImageUpload
                 onImageSelect={handlePropertyImageSelect}
