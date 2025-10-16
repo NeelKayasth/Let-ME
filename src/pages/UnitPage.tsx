@@ -1,4 +1,5 @@
 import Navigation from "@/components/Navigation";
+import MobileBackBar from "@/components/MobileBackBar";
 import Footer from "@/components/Footer";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -96,10 +97,13 @@ const UnitPage = () => {
   return (
     <div className="min-h-screen">
       <Navigation />
+      <MobileBackBar />
+      {/* Mobile back bar */}
+      {/* import-less usage since component is local */}
       
       <main>
         {/* Unit Header */}
-        <section className="bg-gradient-to-br from-primary to-[hsl(var(--hero-gradient-to))] text-primary-foreground py-16 md:py-24">
+        <section className="bg-gradient-to-br from-primary to-[hsl(var(--hero-gradient-to))] text-primary-foreground py-10 md:py-24">
           <div className="container mx-auto px-4">
             <div className="max-w-4xl mx-auto space-y-6 animate-fade-in">
               <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/20 backdrop-blur-sm rounded-full">
@@ -107,7 +111,7 @@ const UnitPage = () => {
                 <span className="font-semibold text-sm">{property.areas?.AreaName}</span>
               </div>
               
-              <h1 className="font-heading text-4xl md:text-5xl lg:text-6xl font-bold">
+              <h1 className="font-heading text-3xl md:text-5xl lg:text-6xl font-bold">
                 {unit.UnitName}
               </h1>
               
@@ -123,7 +127,7 @@ const UnitPage = () => {
               </div>
 
               {unit.Description && (
-                <p className="text-lg text-primary-foreground/90 max-w-3xl">
+                <p className="text-sm md:text-lg text-primary-foreground/90 max-w-3xl line-clamp-3">
                   {unit.Description}
                 </p>
               )}
@@ -144,12 +148,12 @@ const UnitPage = () => {
         </section>
 
         {/* Unit Images */}
-        <section className="py-8 bg-background">
+        <section className="py-6 md:py-8 bg-background">
           <div className="container mx-auto px-4">
             <div className="max-w-6xl mx-auto">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
                 {/* Primary Image */}
-                <div className="relative h-64 overflow-hidden rounded-lg shadow-medium">
+                <div className="relative h-44 md:h-64 overflow-hidden rounded-lg shadow-medium">
                   <img
                     src={getImageUrl(unit.image_url, 'unit')}
                     alt={`${unit.UnitName} - Main Image`}
@@ -162,7 +166,7 @@ const UnitPage = () => {
                 
                 {/* Additional Images from JSON array */}
                 {unit.Images && JSON.parse(unit.Images).map((image: string, index: number) => (
-                  <div key={index} className="relative h-64 overflow-hidden rounded-lg shadow-medium">
+                  <div key={index} className="relative h-44 md:h-64 overflow-hidden rounded-lg shadow-medium">
                     <img
                       src={image}
                       alt={`${unit.UnitName} - Image ${index + 1}`}
@@ -179,7 +183,7 @@ const UnitPage = () => {
         </section>
 
         {/* Unit Details */}
-        <section className="py-16 md:py-24 bg-background">
+        <section className="py-10 md:py-24 bg-background">
           <div className="container mx-auto px-4">
             <div className="max-w-6xl mx-auto">
               <div className="grid lg:grid-cols-3 gap-12">
@@ -227,15 +231,15 @@ const UnitPage = () => {
 
                 {/* Sidebar */}
                 <div className="space-y-6">
-                  <Card className="shadow-medium border-none sticky top-24">
-                    <CardContent className="p-6">
+                  <Card className="shadow-medium border-none sticky top-20 md:top-24">
+                    <CardContent className="p-5 md:p-6">
                       <div className="text-center space-y-4">
                         <div>
-                          <p className="text-sm text-muted-foreground">Monthly Rent</p>
-                          <p className="text-3xl font-bold text-primary">
+                          <p className="text-xs md:text-sm text-muted-foreground">Monthly Rent</p>
+                          <p className="text-2xl md:text-3xl font-bold text-primary">
                             £{unit.MonthlyPrice.toLocaleString()}
                           </p>
-                          <p className="text-sm text-muted-foreground">All bills included</p>
+                          <p className="text-xs md:text-sm text-muted-foreground">All bills included</p>
                         </div>
 
                         <div className="space-y-3">
@@ -262,7 +266,7 @@ const UnitPage = () => {
                         {unit.Available ? (
                           <Link to={`/apply/${unit.UnitID}`} className="block">
                             <Button 
-                              size="lg"
+                              size="sm"
                               className="w-full shadow-soft hover:shadow-medium transition-all"
                             >
                               Apply Now
@@ -271,7 +275,7 @@ const UnitPage = () => {
                           </Link>
                         ) : (
                           <Button 
-                            size="lg"
+                            size="sm"
                             variant="outline"
                             className="w-full"
                             disabled

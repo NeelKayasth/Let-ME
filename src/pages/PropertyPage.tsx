@@ -1,4 +1,5 @@
 import Navigation from "@/components/Navigation";
+import MobileBackBar from "@/components/MobileBackBar";
 import Footer from "@/components/Footer";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -96,10 +97,11 @@ const PropertyPage = () => {
   return (
     <div className="min-h-screen">
       <Navigation />
+      <MobileBackBar />
       
       <main>
         {/* Property Header */}
-        <section className="bg-gradient-to-br from-primary to-[hsl(var(--hero-gradient-to))] text-primary-foreground py-16 md:py-24">
+        <section className="bg-gradient-to-br from-primary to-[hsl(var(--hero-gradient-to))] text-primary-foreground py-10 md:py-24">
           <div className="container mx-auto px-4">
             <div className="max-w-4xl mx-auto space-y-6 animate-fade-in">
               <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/20 backdrop-blur-sm rounded-full">
@@ -107,7 +109,7 @@ const PropertyPage = () => {
                 <span className="font-semibold text-sm">{property.areas?.AreaName}</span>
               </div>
               
-              <h1 className="font-heading text-4xl md:text-5xl lg:text-6xl font-bold">
+              <h1 className="font-heading text-3xl md:text-5xl lg:text-6xl font-bold">
                 {property.Properties || `Property ${property.PropertyID}`}
               </h1>
               
@@ -126,7 +128,7 @@ const PropertyPage = () => {
               </div>
 
               {property.Description && (
-                <p className="text-lg text-primary-foreground/90 max-w-3xl">
+                <p className="text-sm md:text-lg text-primary-foreground/90 max-w-3xl line-clamp-3">
                   {property.Description}
                 </p>
               )}
@@ -135,12 +137,12 @@ const PropertyPage = () => {
         </section>
 
         {/* Property Images */}
-        <section className="py-8 bg-background">
+        <section className="py-6 md:py-8 bg-background">
           <div className="container mx-auto px-4">
             <div className="max-w-6xl mx-auto">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
                 {/* Primary Image */}
-                <div className="relative h-64 overflow-hidden rounded-lg shadow-medium">
+                <div className="relative h-44 md:h-64 overflow-hidden rounded-lg shadow-medium">
                   <img
                     src={getImageUrl(property.image_url, 'property')}
                     alt={`${property.Properties} - Main Image`}
@@ -153,7 +155,7 @@ const PropertyPage = () => {
                 
                 {/* Additional Images from JSON array */}
                 {property.Images && JSON.parse(property.Images).map((image: string, index: number) => (
-                  <div key={index} className="relative h-64 overflow-hidden rounded-lg shadow-medium">
+                  <div key={index} className="relative h-44 md:h-64 overflow-hidden rounded-lg shadow-medium">
                     <img
                       src={image}
                       alt={`${property.Properties} - Image ${index + 1}`}
@@ -170,26 +172,26 @@ const PropertyPage = () => {
         </section>
 
         {/* Available Units */}
-        <section className="py-16 md:py-24 bg-background">
+        <section className="py-10 md:py-24 bg-background">
           <div className="container mx-auto px-4">
             <div className="max-w-6xl mx-auto">
-              <div className="text-center mb-12">
-                <h2 className="font-heading text-3xl md:text-4xl font-bold mb-4">
+                <div className="text-center mb-8 md:mb-12">
+                <h2 className="font-heading text-2xl md:text-4xl font-bold mb-2 md:mb-4">
                   Available Units
                 </h2>
-                <p className="text-muted-foreground text-lg">
+                <p className="text-muted-foreground text-sm md:text-lg">
                   {units.length} units available in this property
                 </p>
               </div>
 
               {units.length > 0 ? (
-                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8">
+                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-8">
                   {units.map((unit) => (
                     <Card 
                       key={unit.UnitID} 
                       className="overflow-hidden shadow-medium hover:shadow-large transition-all duration-300 hover:scale-105 border-none"
                     >
-                      <div className="relative h-64 overflow-hidden">
+                      <div className="relative h-40 md:h-64 overflow-hidden">
                         <img
                           src={getImageUrl(unit.image_url, 'unit')}
                           alt={unit.UnitName}
@@ -205,32 +207,26 @@ const PropertyPage = () => {
                         </div>
                       </div>
                       
-                      <CardContent className="p-6 space-y-4">
+                      <CardContent className="p-4 md:p-6 space-y-3 md:space-y-4">
                         <div>
-                          <h3 className="font-heading text-xl font-bold text-foreground mb-2">
+                          <h3 className="font-heading text-lg md:text-xl font-bold text-foreground mb-1 md:mb-2">
                             {unit.UnitName}
                           </h3>
                           {unit.Description && (
-                            <p className="text-sm text-muted-foreground line-clamp-3">
+                            <p className="text-xs md:text-sm text-muted-foreground line-clamp-2 md:line-clamp-3">
                               {unit.Description}
                             </p>
                           )}
                         </div>
 
-                        <div className="flex items-center justify-between pt-4 border-t border-border">
-                          <div>
-                            <p className="text-sm text-muted-foreground">Monthly rent</p>
-                            <p className="text-2xl font-bold text-primary">
-                              £{unit.MonthlyPrice.toLocaleString()}
-                            </p>
-                          </div>
-                          <Link to={`/apply/${unit.UnitID}`}>
+                        <div className="pt-4 border-t border-border space-y-3">
+                          <p className="text-base md:text-lg font-bold text-foreground">£{unit.MonthlyPrice.toLocaleString()} pcm</p>
+                          <Link to={`/apply/${unit.UnitID}`} className="block">
                             <Button 
-                              size="lg"
-                              className="shadow-soft hover:shadow-medium transition-all"
+                              size="sm"
+                              className="w-full bg-[#F2B41E] hover:bg-[#E0A61A] text-black font-semibold"
                             >
-                              Apply Now
-                              <ArrowRight className="ml-2 h-4 w-4" />
+                              Check whether you qualify to rent this
                             </Button>
                           </Link>
                         </div>

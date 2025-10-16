@@ -20,7 +20,7 @@ const AdminPage = () => {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [dataLoading, setDataLoading] = useState(false);
-  const [showSignUp, setShowSignUp] = useState(false);
+  // const [showSignUp, setShowSignUp] = useState(false); // Sign up disabled
   const [properties, setProperties] = useState<Property[]>([]);
   const [units, setUnits] = useState<Unit[]>([]);
   const [areas, setAreas] = useState<Area[]>([]);
@@ -113,45 +113,26 @@ const AdminPage = () => {
     }
   };
 
-  const handleSignUp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-
-    try {
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-      });
-
-      if (error) {
-        throw error;
-      }
-
-      if (data.user) {
-        // Automatically add user to admin_users table
-        await ensureUserIsAdmin(data.user.id, email);
-        
-        toast({
-          title: "Sign Up Successful",
-          description: "Please check your email to confirm your account.",
-        });
-        
-        // Switch to login mode
-        setShowSignUp(false);
-        setEmail('');
-        setPassword('');
-      }
-    } catch (error) {
-      console.error('Sign up error:', error);
-      toast({
-        title: "Sign Up Failed",
-        description: error instanceof Error ? error.message : "An error occurred during sign up.",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
+  // const handleSignUp = async (e: React.FormEvent) => { /* Sign up disabled */
+  //   e.preventDefault();
+  //   setLoading(true);
+  //   try {
+  //     const { data, error } = await supabase.auth.signUp({ email, password });
+  //     if (error) throw error;
+  //     if (data.user) {
+  //       await ensureUserIsAdmin(data.user.id, email);
+  //       toast({ title: "Sign Up Successful", description: "Please check your email to confirm your account." });
+  //       setShowSignUp(false);
+  //       setEmail('');
+  //       setPassword('');
+  //     }
+  //   } catch (error) {
+  //     console.error('Sign up error:', error);
+  //     toast({ title: "Sign Up Failed", description: error instanceof Error ? error.message : "An error occurred during sign up.", variant: "destructive" });
+  //   } finally {
+  //     setLoading(false);
+  //   }
+  // };
 
   const ensureUserIsAdmin = async (userId: string, userEmail: string) => {
     try {
@@ -774,18 +755,13 @@ const AdminPage = () => {
       <div className="min-h-screen bg-background flex items-center justify-center">
         <Card className="w-full max-w-md shadow-large border-none">
           <CardHeader className="text-center">
-            <CardTitle className="text-2xl font-bold">
-              {showSignUp ? "Admin Sign Up" : "Admin Login"}
-            </CardTitle>
+            <CardTitle className="text-2xl font-bold">Admin Login</CardTitle>
             <p className="text-muted-foreground">
-              {showSignUp 
-                ? "Create a new admin account" 
-                : "Enter your credentials to access the admin panel"
-              }
+              Enter your credentials to access the admin panel
             </p>
           </CardHeader>
           <CardContent>
-            <form onSubmit={showSignUp ? handleSignUp : handleLogin} className="space-y-4">
+            <form onSubmit={handleLogin} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
                 <Input
@@ -810,38 +786,13 @@ const AdminPage = () => {
                 />
               </div>
               <Button type="submit" className="w-full" disabled={loading}>
-                {loading 
-                  ? (showSignUp ? "Creating Account..." : "Signing In...") 
-                  : (showSignUp ? "Create Account" : "Sign In")
-                }
+                {loading ? "Signing In..." : "Sign In"}
               </Button>
             </form>
             
-            <div className="mt-4 text-center">
-              <button
-                type="button"
-                onClick={() => {
-                  setShowSignUp(!showSignUp);
-                  setEmail('');
-                  setPassword('');
-                }}
-                className="text-sm text-primary hover:underline"
-              >
-                {showSignUp 
-                  ? "Already have an account? Sign in" 
-                  : "Don't have an account? Sign up"
-                }
-              </button>
-            </div>
+            {/** Sign up toggle removed */}
 
-            {showSignUp && (
-              <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                <p className="text-sm text-blue-800">
-                  <strong>Note:</strong> After signing up, you'll receive a confirmation email. 
-                  Once confirmed, you'll have full admin access to manage properties and units.
-                </p>
-              </div>
-            )}
+            {/** Sign up note removed */}
           </CardContent>
         </Card>
       </div>
