@@ -101,73 +101,70 @@ const ChristchurchPage = () => {
                 {properties.length > 0 ? (
                   <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8">
                     {properties.map((property) => (
-                      <Card 
-                        key={property.PropertyID} 
-                        role="button"
-                        tabIndex={0}
-                        onClick={() => (window.location.href = `/property/${property.PropertyID}`)}
-                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { (window.location.href = `/property/${property.PropertyID}`); } }}
-                        className="overflow-hidden shadow-medium border-none hover-outline cursor-pointer"
-                      >
-                        <div className="relative h-40 md:h-64 overflow-hidden">
-                          <img
-                            src={getImageUrl(property.image_url, 'property')}
-                            alt={property.Properties || 'Property'}
-                            className="w-full h-full object-cover transition-transform duration-300 hover:scale-110"
-                            onError={(e) => {
-                              // Fallback to default image if the current one fails to load
-                              e.currentTarget.src = getImageUrl(null, 'property');
-                            }}
-                          />
-                          {(property.availableCount || 0) > 0 && (
-                            <div className="absolute top-4 right-4">
-                              <Badge className="bg-accent text-accent-foreground shadow-medium">
-                                {property.availableCount} Available
-                              </Badge>
-                            </div>
-                          )}
-                        </div>
-                        
-                        <CardContent className="p-4 md:p-6 space-y-3 md:space-y-4">
-                          <div>
-                            <h3 className="font-heading text-lg md:text-xl font-bold text-foreground mb-1 md:mb-2">
+                      <Link key={property.PropertyID} to={`/property/${property.PropertyID}`} className="block">
+                        <Card className="overflow-hidden shadow-medium border-none hover-outline cursor-pointer">
+                          <div className="p-4 md:hidden">
+                            <h3 className="font-heading text-lg font-bold text-foreground mb-1">
                               {property.Properties || `Property ${property.PropertyID}`}
                             </h3>
                             <div className="flex items-center text-muted-foreground gap-1">
-                              <MapPin className="h-3 w-3 md:h-4 md:w-4" />
-                              <span className="text-xs md:text-sm line-clamp-1">{property.addresses?.Address}</span>
+                              <MapPin className="h-3 w-3" />
+                              <span className="text-xs line-clamp-1">{property.addresses?.Address}</span>
                             </div>
                           </div>
 
-                          {property.Description && (
-                            <p className="text-xs md:text-sm text-muted-foreground line-clamp-2 md:line-clamp-3">
-                              {property.Description}
-                            </p>
-                          )}
-
-                          <div className="pt-4 border-t border-border space-y-3">
-                            {property.availableCount && property.availableCount > 0 ? (
-                              <>
-                                <p className="text-base md:text-lg font-bold text-foreground">
-                                  {property.minPrice === property.maxPrice || property.maxPrice === undefined
-                                    ? `£${property.minPrice} pcm`
-                                    : `£${property.minPrice} - £${property.maxPrice} pcm`}
-                                </p>
-                                <Link to={`/property/${property.PropertyID}`} className="block">
-                                  <Button 
-                                    size="sm"
-                                    className="w-full bg-[#F2B41E] hover:bg-[#E0A61A] text-black font-semibold"
-                                  >
-                                    {`View ${property.availableCount} available units in this building`}
-                                  </Button>
-                                </Link>
-                              </>
-                            ) : (
-                              <p className="text-xs md:text-sm text-muted-foreground">No units available</p>
+                          <div className="relative h-40 md:h-64 overflow-hidden">
+                            <img
+                              src={getImageUrl(property.image_url, 'property')}
+                              alt={property.Properties || 'Property'}
+                              className="w-full h-full object-cover"
+                              onError={(e) => { e.currentTarget.src = getImageUrl(null, 'property'); }}
+                            />
+                            {(property.availableCount || 0) > 0 && (
+                              <div className="hidden md:block absolute top-4 right-4">
+                                <Badge className="bg-accent text-accent-foreground shadow-medium">
+                                  {property.availableCount} Available
+                                </Badge>
+                              </div>
                             )}
                           </div>
-                        </CardContent>
-                      </Card>
+
+                          <CardContent className="p-4 md:p-6 space-y-3 md:space-y-4">
+                            <div className="hidden md:block">
+                              <h3 className="font-heading text-xl font-bold text-foreground mb-2">
+                                {property.Properties || `Property ${property.PropertyID}`}
+                              </h3>
+                              <div className="flex items-center text-muted-foreground gap-1">
+                                <MapPin className="h-4 w-4" />
+                                <span className="text-sm line-clamp-1">{property.addresses?.Address}</span>
+                              </div>
+                            </div>
+
+                            {property.Description && (
+                              <p className="text-xs md:text-sm text-muted-foreground md:line-clamp-3">
+                                {property.Description}
+                              </p>
+                            )}
+
+                            <div className="pt-4 border-t border-border space-y-3">
+                              {property.availableCount && property.availableCount > 0 ? (
+                                <>
+                                  <p className="text-base md:text-lg font-bold text-foreground">
+                                    {property.minPrice === property.maxPrice || property.maxPrice === undefined
+                                      ? `£${property.minPrice} pcm`
+                                      : `£${property.minPrice} - £${property.maxPrice} pcm`}
+                                  </p>
+                                  <Button size="sm" className="w-full bg-[#F2B41E] hover:bg-[#E0A61A] text-black font-semibold">
+                                    {`View ${property.availableCount} available units in this building`}
+                                  </Button>
+                                </>
+                              ) : (
+                                <p className="text-xs md:text-sm text-muted-foreground">No units available</p>
+                              )}
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </Link>
                     ))}
                   </div>
                 ) : (
