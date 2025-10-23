@@ -12,7 +12,8 @@ import { Plus, Edit, Trash2, Eye, LogOut, Home, Building, Users, FileText } from
 import { supabase, Property, Unit, Area, Address } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
 import ImageUpload from "@/components/ImageUpload";
-import { validateImage, generateFileName, getImageUrl, getPrimaryImageUrl } from "@/lib/imageUtils";
+import MultiImageUpload from "@/components/MultiImageUpload";
+import { validateImage, generateFileName, getImageUrl, getPrimaryImageUrl, resizeAndCompressImage, stringifyImageUrls, parseImageUrls } from "@/lib/imageUtils";
 
 const AdminPage = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -20,7 +21,6 @@ const AdminPage = () => {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [dataLoading, setDataLoading] = useState(false);
-  // const [showSignUp, setShowSignUp] = useState(false); // Sign up disabled
   const [properties, setProperties] = useState<Property[]>([]);
   const [units, setUnits] = useState<Unit[]>([]);
   const [areas, setAreas] = useState<Area[]>([]);
@@ -44,8 +44,6 @@ const AdminPage = () => {
   const [unitImage, setUnitImage] = useState<File | null>(null);
   const [unitImagePreview, setUnitImagePreview] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
-  const { toast } = useToast();
-
   const [propertyForm, setPropertyForm] = useState({
     Properties: '',
     AreaID: '',
@@ -54,7 +52,6 @@ const AdminPage = () => {
     Images: '',
     Description: ''
   });
-
   const [unitForm, setUnitForm] = useState({
     PropertyID: '',
     UnitName: '',
@@ -63,49 +60,47 @@ const AdminPage = () => {
     Images: '',
     Description: ''
   });
+  // Multi-image selections (not uploaded until submit)
+  const [propertyImagesFiles, setPropertyImagesFiles] = useState<File[]>([]);
+  const [unitImagesFiles, setUnitImagesFiles] = useState<File[]>([]);
+  const { toast } = useToast();
 
   useEffect(() => {
-    // Check if user is already authenticated
-    const checkAuth = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session && session.user) {
-        // Automatically ensure user is admin
-        await ensureUserIsAdmin(session.user.id, session.user.email || '');
-        setIsAuthenticated(true);
-        fetchData();
-      }
-    };
     checkAuth();
   }, []);
+
+  const checkAuth = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session) {
+      setIsAuthenticated(true);
+      await ensureUserIsAdmin(session.user.id, session.user.email || '');
+      fetchData();
+    }
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
 
-      if (error) {
-        throw error;
-      }
+      if (error) throw error;
 
-      // Automatically add user to admin_users table if not already there
       await ensureUserIsAdmin(data.user.id, email);
-      
       setIsAuthenticated(true);
       fetchData();
       toast({
         title: "Login Successful",
-        description: "Welcome to the admin panel!",
+        description: "Welcome to the admin panel.",
       });
     } catch (error) {
       console.error('Login error:', error);
       toast({
         title: "Login Failed",
-        description: "Invalid email or password.",
+        description: error instanceof Error ? error.message : "Invalid credentials.",
         variant: "destructive",
       });
     } finally {
@@ -113,42 +108,19 @@ const AdminPage = () => {
     }
   };
 
-  // const handleSignUp = async (e: React.FormEvent) => { /* Sign up disabled */
-  //   e.preventDefault();
-  //   setLoading(true);
-  //   try {
-  //     const { data, error } = await supabase.auth.signUp({ email, password });
-  //     if (error) throw error;
-  //     if (data.user) {
-  //       await ensureUserIsAdmin(data.user.id, email);
-  //       toast({ title: "Sign Up Successful", description: "Please check your email to confirm your account." });
-  //       setShowSignUp(false);
-  //       setEmail('');
-  //       setPassword('');
-  //     }
-  //   } catch (error) {
-  //     console.error('Sign up error:', error);
-  //     toast({ title: "Sign Up Failed", description: error instanceof Error ? error.message : "An error occurred during sign up.", variant: "destructive" });
-  //   } finally {
-  //     setLoading(false);
-  //   }
-  // };
-
   const ensureUserIsAdmin = async (userId: string, userEmail: string) => {
     try {
-      // Check if user is already in admin_users table
       const { data: existingAdmin, error: checkError } = await supabase
         .from('admin_users')
         .select('*')
         .eq('id', userId)
         .single();
 
-      if (checkError && checkError.code !== 'PGRST116') { // PGRST116 = no rows returned
+      if (checkError && checkError.code !== 'PGRST116') {
         console.error('Error checking admin status:', checkError);
         return;
       }
 
-      // If user is not in admin_users table, add them
       if (!existingAdmin) {
         const { error: insertError } = await supabase
           .from('admin_users')
@@ -181,12 +153,20 @@ const AdminPage = () => {
       throw new Error(`Failed to upload image: ${error.message}`);
     }
 
-    // Get public URL
     const { data: { publicUrl } } = supabase.storage
       .from(bucket)
       .getPublicUrl(filePath);
 
     return publicUrl;
+  };
+
+  const uploadMultipleImages = async (files: File[], bucket: string, folder: string): Promise<string[]> => {
+    const urls: string[] = [];
+    for (const file of files) {
+      const url = await uploadImage(file, bucket, folder);
+      urls.push(url);
+    }
+    return urls;
   };
 
   const handlePropertyImageSelect = (file: File) => {
@@ -227,7 +207,6 @@ const AdminPage = () => {
     try {
       console.log('Fetching data...');
       
-      // Check if user is authenticated
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         console.error('No authenticated user found');
@@ -237,11 +216,8 @@ const AdminPage = () => {
       }
       
       console.log('User authenticated:', user.email);
-
-      // User is automatically an admin, no need to check
       console.log('User authenticated and auto-admin:', user.email);
 
-      // Fetch areas first (public access)
       const { data: areasData, error: areasError } = await supabase
         .from('Areas')
         .select('*');
@@ -254,7 +230,6 @@ const AdminPage = () => {
         setAreas(areasData || []);
       }
 
-      // Fetch addresses (public access)
       const { data: addressesData, error: addressesError } = await supabase
         .from('addresses')
         .select('*');
@@ -267,7 +242,6 @@ const AdminPage = () => {
         setAddresses(addressesData || []);
       }
 
-      // Fetch properties with related data (admin access)
       const { data: propertiesData, error: propertiesError } = await supabase
         .from('Properties')
         .select(`
@@ -289,7 +263,6 @@ const AdminPage = () => {
         setProperties(propertiesData || []);
       }
 
-      // Fetch units (admin access) - using correct table name
       const { data: unitsData, error: unitsError } = await supabase
         .from('Units')
         .select(`
@@ -329,22 +302,24 @@ const AdminPage = () => {
     try {
       let imageUrl = null;
       
-      // Upload image if provided
       if (propertyImage) {
         imageUrl = await uploadImage(propertyImage, 'property-images', 'properties');
       }
 
-      // Prepare the data object
+      let additionalUrls: string[] = [];
+      if (propertyImagesFiles && propertyImagesFiles.length > 0) {
+        additionalUrls = await uploadMultipleImages(propertyImagesFiles, 'property-images', 'properties');
+      }
+
       const propertyData: any = {
         Properties: propertyForm.Properties,
         AreaID: parseInt(propertyForm.AreaID),
         AddressID: parseInt(propertyForm.AddressID),
         PlusCode: propertyForm.PlusCode,
-        Images: propertyForm.Images,
+        Images: additionalUrls.length > 0 ? JSON.stringify(additionalUrls) : propertyForm.Images,
         Description: propertyForm.Description
       };
 
-      // Only add image_url if we have one
       if (imageUrl) {
         propertyData.image_url = imageUrl;
       }
@@ -371,6 +346,7 @@ const AdminPage = () => {
       });
       setPropertyImage(null);
       setPropertyImagePreview(null);
+      setPropertyImagesFiles([]);
       fetchData();
     } catch (error) {
       console.error('Error adding property:', error);
@@ -390,22 +366,24 @@ const AdminPage = () => {
     try {
       let imageUrl = null;
       
-      // Upload image if provided
       if (unitImage) {
         imageUrl = await uploadImage(unitImage, 'unit-images', 'units');
       }
 
-      // Prepare the data object
+      let additionalUnitUrls: string[] = [];
+      if (unitImagesFiles && unitImagesFiles.length > 0) {
+        additionalUnitUrls = await uploadMultipleImages(unitImagesFiles, 'unit-images', 'units');
+      }
+
       const unitData: any = {
         PropertyID: parseInt(unitForm.PropertyID),
         UnitName: unitForm.UnitName,
         MonthlyPrice: parseFloat(unitForm.MonthlyPrice),
         Available: unitForm.Available,
-        Images: unitForm.Images,
+        Images: additionalUnitUrls.length > 0 ? JSON.stringify(additionalUnitUrls) : unitForm.Images,
         Description: unitForm.Description
       };
 
-      // Only add image_url if we have one
       if (imageUrl) {
         unitData.image_url = imageUrl;
       }
@@ -432,6 +410,7 @@ const AdminPage = () => {
       });
       setUnitImage(null);
       setUnitImagePreview(null);
+      setUnitImagesFiles([]);
       fetchData();
     } catch (error) {
       console.error('Error adding unit:', error);
@@ -462,60 +441,46 @@ const AdminPage = () => {
       fetchData();
     } catch (error) {
       console.error('Error deleting property:', error);
-      // If foreign key violation, prompt for cascade delete
-      const message = error instanceof Error ? error.message : '';
-      if (message.includes('foreign key') || message.includes('violates foreign key') || message.includes('violates row-level security policy') || message.includes('23503')) {
-        // Try to fetch number of units for the property
-        const { count } = await supabase
-          .from('Units')
-          .select('UnitID', { count: 'exact', head: true })
-          .eq('PropertyID', propertyId);
-        setCascadeConfirm({ open: true, property: properties.find(p => p.PropertyID === propertyId) || null, unitsCount: count || 0 });
-        toast({
-          title: 'Property has related units',
-          description: 'This property has units attached. You can delete the property along with all its units.',
-          variant: 'destructive'
-        });
-      } else {
-        toast({
-          title: "Error",
-          description: "Failed to delete property.",
-          variant: "destructive",
-        });
-      }
+      toast({
+        title: "Error",
+        description: "Failed to delete property. It may have related units.",
+        variant: "destructive",
+      });
     }
   };
 
   const confirmDeleteProperty = async (property: Property) => {
-    // Check if units exist
-    const { count } = await supabase
-      .from('Units')
-      .select('UnitID', { count: 'exact', head: true })
-      .eq('PropertyID', property.PropertyID);
-    if ((count || 0) > 0) {
-      setCascadeConfirm({ open: true, property, unitsCount: count || 0 });
-      return;
-    }
-    await handleDeleteProperty(property.PropertyID);
-  };
-
-  const handleCascadeDeleteProperty = async () => {
-    if (!cascadeConfirm.property) return;
     try {
-      // Delete units first
-      const { error: unitsError } = await supabase
+      const { data: relatedUnits, error: unitsError } = await supabase
         .from('Units')
-        .delete()
-        .eq('PropertyID', cascadeConfirm.property.PropertyID);
+        .select('UnitID')
+        .eq('PropertyID', property.PropertyID);
+
       if (unitsError) throw unitsError;
 
-      // Delete property
-      const { error: propError } = await supabase
-        .from('Properties')
-        .delete()
-        .eq('PropertyID', cascadeConfirm.property.PropertyID);
-      if (propError) throw propError;
+      if (relatedUnits && relatedUnits.length > 0) {
+        setCascadeConfirm({
+          open: true,
+          property,
+          unitsCount: relatedUnits.length
+        });
+      } else {
+        await handleDeleteProperty(property.PropertyID);
+      }
+    } catch (error) {
+      console.error('Error checking related units:', error);
+      toast({
+        title: "Error",
+        description: "Failed to check related units.",
+        variant: "destructive",
+      });
+    }
+  };
 
+  const handleCascadeDeleteProperty = async (property: Property) => {
+    try {
+      await supabase.from('Units').delete().eq('PropertyID', property.PropertyID);
+      await supabase.from('Properties').delete().eq('PropertyID', property.PropertyID);
       setCascadeConfirm({ open: false, property: null, unitsCount: 0 });
       toast({ title: 'Deleted', description: 'Property and all related units have been deleted.' });
       fetchData();
@@ -547,6 +512,7 @@ const AdminPage = () => {
     });
     setPropertyImage(null);
     setPropertyImagePreview(property.image_url || null);
+    setPropertyImagesFiles([]);
     setShowEditPropertyDialog(true);
   };
 
@@ -558,7 +524,6 @@ const AdminPage = () => {
     try {
       let imageUrl = editingProperty.image_url;
 
-      // Upload new image if one is selected
       if (propertyImage) {
         const fileName = generateFileName(propertyImage.name, 'property');
         const filePath = `properties/${fileName}`;
@@ -577,12 +542,18 @@ const AdminPage = () => {
         imageUrl = publicUrl;
       }
 
+      // Upload additional images if provided
+      let additionalUrls: string[] = [];
+      if (propertyImagesFiles && propertyImagesFiles.length > 0) {
+        additionalUrls = await uploadMultipleImages(propertyImagesFiles, 'property-images', 'properties');
+      }
+
       const updateData: any = {
         Properties: propertyForm.Properties,
         AreaID: parseInt(propertyForm.AreaID),
         AddressID: parseInt(propertyForm.AddressID),
         PlusCode: propertyForm.PlusCode,
-        Images: propertyForm.Images,
+        Images: additionalUrls.length > 0 ? JSON.stringify(additionalUrls) : propertyForm.Images,
         Description: propertyForm.Description
       };
 
@@ -611,6 +582,7 @@ const AdminPage = () => {
       });
       setPropertyImage(null);
       setPropertyImagePreview(null);
+      setPropertyImagesFiles([]);
 
       toast({
         title: "Property Updated",
@@ -642,6 +614,7 @@ const AdminPage = () => {
     });
     setUnitImage(null);
     setUnitImagePreview(unit.image_url || null);
+    setUnitImagesFiles([]);
     setShowEditUnitDialog(true);
   };
 
@@ -653,7 +626,6 @@ const AdminPage = () => {
     try {
       let imageUrl = editingUnit.image_url;
 
-      // Upload new image if one is selected
       if (unitImage) {
         const fileName = generateFileName(unitImage.name, 'unit');
         const filePath = `units/${fileName}`;
@@ -672,12 +644,18 @@ const AdminPage = () => {
         imageUrl = publicUrl;
       }
 
+      // Upload additional images if provided
+      let additionalUnitUrls: string[] = [];
+      if (unitImagesFiles && unitImagesFiles.length > 0) {
+        additionalUnitUrls = await uploadMultipleImages(unitImagesFiles, 'unit-images', 'units');
+      }
+
       const updateData: any = {
         PropertyID: parseInt(unitForm.PropertyID),
         UnitName: unitForm.UnitName,
         MonthlyPrice: parseFloat(unitForm.MonthlyPrice),
         Available: unitForm.Available,
-        Images: unitForm.Images,
+        Images: additionalUnitUrls.length > 0 ? JSON.stringify(additionalUnitUrls) : unitForm.Images,
         Description: unitForm.Description
       };
 
@@ -706,6 +684,7 @@ const AdminPage = () => {
       });
       setUnitImage(null);
       setUnitImagePreview(null);
+      setUnitImagesFiles([]);
 
       toast({
         title: "Unit Updated",
@@ -752,13 +731,10 @@ const AdminPage = () => {
 
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <Card className="w-full max-w-md shadow-large border-none">
-          <CardHeader className="text-center">
-            <CardTitle className="text-2xl font-bold">Admin Login</CardTitle>
-            <p className="text-muted-foreground">
-              Enter your credentials to access the admin panel
-            </p>
+      <div className="min-h-screen bg-white flex items-center justify-center px-4">
+        <Card className="w-full max-w-md">
+          <CardHeader>
+            <CardTitle className="text-2xl font-bold text-center">Admin Login</CardTitle>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleLogin} className="space-y-4">
@@ -780,19 +756,14 @@ const AdminPage = () => {
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Enter your password"
+                  placeholder="Enter password"
                   required
-                  minLength={6}
                 />
               </div>
               <Button type="submit" className="w-full" disabled={loading}>
-                {loading ? "Signing In..." : "Sign In"}
+                {loading ? "Signing in..." : "Sign In"}
               </Button>
             </form>
-            
-            {/** Sign up toggle removed */}
-
-            {/** Sign up note removed */}
           </CardContent>
         </Card>
       </div>
@@ -800,44 +771,35 @@ const AdminPage = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background overflow-x-hidden">
+    <div className="min-h-screen bg-white">
       {/* Header */}
-      <header className="bg-foreground text-background p-4 sticky top-0 z-50">
-        <div className="container mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Building className="h-8 w-8" />
-            <h1 className="text-2xl font-bold">LetMe Admin Panel</h1>
-          </div>
+      <header className="bg-white border-b border-gray-200 px-4 py-3 sticky top-0 z-50">
+        <div className="flex items-center justify-between">
+          <h1 className="text-lg font-semibold text-gray-900">Letme Properties list admin page</h1>
           <Button 
             variant="outline" 
             onClick={handleLogout} 
-            className="bg-background text-foreground border-background hover:bg-background/90 hover:text-foreground shadow-md"
+            className="text-sm px-3 py-1"
           >
-            <LogOut className="h-4 w-4 mr-2" />
+            <LogOut className="h-4 w-4 mr-1" />
             Logout
           </Button>
         </div>
       </header>
 
-      <main className="container mx-auto p-4 md:p-6 max-w-7xl">
+      <main className="px-4 py-6">
         {/* Loading State */}
         {dataLoading && (
           <div className="text-center py-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
-            <p className="mt-4 text-muted-foreground">Loading admin data...</p>
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-600 mx-auto"></div>
+            <p className="mt-4 text-gray-600">Loading...</p>
           </div>
         )}
 
         {/* Error State */}
         {error && !dataLoading && (
-          <div className="mb-6 p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
-            <div className="flex items-center gap-2">
-              <div className="h-4 w-4 rounded-full bg-destructive"></div>
-              <p className="text-destructive font-medium">Error: {error}</p>
-            </div>
-            <p className="text-sm text-muted-foreground mt-2">
-              Please check your admin permissions and try refreshing the page.
-            </p>
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+            <p className="text-red-600 font-medium">Error: {error}</p>
             <Button 
               variant="outline" 
               size="sm" 
@@ -852,208 +814,28 @@ const AdminPage = () => {
         {/* Main Content - Only show when not loading and no critical errors */}
         {!dataLoading && !error && (
           <>
-            {/* Stats Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-          <Card className="shadow-medium border-none">
-            <CardContent className="p-6">
-              <div className="flex items-center gap-4">
-                <div className="p-3 bg-primary/10 rounded-full">
-                  <Building className="h-6 w-6 text-primary" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold">{properties.length}</p>
-                  <p className="text-sm text-muted-foreground">Properties</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="shadow-medium border-none">
-            <CardContent className="p-6">
-              <div className="flex items-center gap-4">
-                <div className="p-3 bg-accent/10 rounded-full">
-                  <Home className="h-6 w-6 text-accent" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold">{units.length}</p>
-                  <p className="text-sm text-muted-foreground">Units</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="shadow-medium border-none">
-            <CardContent className="p-6">
-              <div className="flex items-center gap-4">
-                <div className="p-3 bg-green-500/10 rounded-full">
-                  <Users className="h-6 w-6 text-green-500" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold">{units.filter(u => u.Available).length}</p>
-                  <p className="text-sm text-muted-foreground">Available Units</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="shadow-medium border-none">
-            <CardContent className="p-6">
-              <div className="flex items-center gap-4">
-                <div className="p-3 bg-blue-500/10 rounded-full">
-                  <FileText className="h-6 w-6 text-blue-500" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold">{areas.length}</p>
-                  <p className="text-sm text-muted-foreground">Areas</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Properties Section */}
-        <Card className="shadow-medium border-none mb-8">
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle className="flex items-center gap-2">
-                <Building className="h-5 w-5" />
-                Properties
-              </CardTitle>
-              <Dialog open={showPropertyDialog} onOpenChange={setShowPropertyDialog}>
-                <DialogTrigger asChild>
-                  <Button>
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add New Property
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="w-[95vw] sm:max-w-2xl max-h-[90vh] overflow-y-auto">
-                  <DialogHeader>
-                    <DialogTitle>Add New Property</DialogTitle>
-                  </DialogHeader>
-                  <div className="space-y-4 pr-2">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="propertyName">Property Name</Label>
-                        <Input
-                          id="propertyName"
-                          value={propertyForm.Properties}
-                          onChange={(e) => setPropertyForm(prev => ({ ...prev, Properties: e.target.value }))}
-                          placeholder="Property name"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="area">Area</Label>
-                        <Select value={propertyForm.AreaID} onValueChange={(value) => setPropertyForm(prev => ({ ...prev, AreaID: value }))}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select area" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {areas.map((area) => (
-                              <SelectItem key={area.AreaID} value={area.AreaID.toString()}>
-                                {area.AreaName}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="address">Address</Label>
-                      <Select value={propertyForm.AddressID} onValueChange={(value) => setPropertyForm(prev => ({ ...prev, AddressID: value }))}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select address" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {addresses.map((address) => (
-                            <SelectItem key={address.AddressId} value={address.AddressId.toString()}>
-                              {address.Address}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="plusCode">Google Maps Link (or Plus Code)</Label>
-                      <Input
-                        id="plusCode"
-                        value={propertyForm.PlusCode}
-                        onChange={(e) => setPropertyForm(prev => ({ ...prev, PlusCode: e.target.value }))}
-                        placeholder="https://maps.google.com/... or 9C4X+XF Bournemouth"
-                      />
-                      <p className="text-xs text-muted-foreground">Paste a Google Maps URL for this property. Plus Code also accepted.</p>
-                    </div>
-                    <ImageUpload
-                      onImageSelect={handlePropertyImageSelect}
-                      onImageRemove={handlePropertyImageRemove}
-                      selectedImage={propertyImage}
-                      previewUrl={propertyImagePreview}
-                      type="property"
-                      disabled={uploading}
-                    />
-                    <div className="space-y-2">
-                      <Label htmlFor="images">Additional Images (JSON array)</Label>
-                      <Textarea
-                        id="images"
-                        value={propertyForm.Images}
-                        onChange={(e) => setPropertyForm(prev => ({ ...prev, Images: e.target.value }))}
-                        placeholder='["image1.jpg", "image2.jpg"]'
-                        rows={3}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="description">Description</Label>
-                      <Textarea
-                        id="description"
-                        value={propertyForm.Description}
-                        onChange={(e) => setPropertyForm(prev => ({ ...prev, Description: e.target.value }))}
-                        placeholder="Property description (max 500 characters)"
-                        rows={3}
-                      />
-                    </div>
-                    <div className="flex justify-end gap-2 pt-4 border-t">
-                      <Button variant="outline" onClick={() => setShowPropertyDialog(false)} disabled={uploading}>
-                        Cancel
-                      </Button>
-                      <Button onClick={handleAddProperty} disabled={uploading}>
-                        {uploading ? "Adding..." : "Add Property"}
-                      </Button>
-                    </div>
-                  </div>
-                </DialogContent>
-              </Dialog>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
+            {/* Properties List */}
+            <div className="space-y-3 mb-8">
               {properties.map((property) => (
-                <div key={property.PropertyID} className="flex flex-col sm:flex-row sm:items-center gap-4 p-4 border rounded-lg">
-                  <div className="w-full sm:w-20 h-40 sm:h-20 rounded-lg overflow-hidden bg-muted flex-shrink-0">
-                    <img
-                      src={getImageUrl(property.image_url, 'property')}
-                      alt={property.Properties || `Property ${property.PropertyID}`}
-                      className="w-full h-full object-cover"
-                    />
+                <div key={property.PropertyID} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                  <div className="flex-1">
+                    <p className="text-gray-900 font-medium">
+                      {property.addresses?.Address || property.Properties || `Property ${property.PropertyID}`}
+                    </p>
                   </div>
-                  <div className="flex-1 space-y-1">
-                    <h3 className="font-semibold">{property.Properties || `Property ${property.PropertyID}`}</h3>
-                    <p className="text-sm text-muted-foreground">{property.addresses?.Address}</p>
-                    <p className="text-sm text-muted-foreground">{property.areas?.AreaName}</p>
-                  </div>
-                  <div className="flex flex-wrap justify-end sm:justify-start gap-2 w-full sm:w-auto">
-                    <Button variant="outline" size="sm" onClick={() => handleViewProperty(property)}>
-                      <Eye className="h-4 w-4" />
-                    </Button>
+                  <div className="flex items-center gap-2">
                     <Button 
                       variant="outline" 
                       size="sm" 
                       onClick={() => handleEditProperty(property)}
+                      className="px-3 py-1 text-sm"
                     >
-                      <Edit className="h-4 w-4" />
+                      Edit
                     </Button>
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
-                        <Button variant="outline" size="sm">
-                          <Trash2 className="h-4 w-4" />
+                        <Button variant="outline" size="sm" className="px-3 py-1 text-sm text-red-600 border-red-200 hover:bg-red-50">
+                          Delete
                         </Button>
                       </AlertDialogTrigger>
                       <AlertDialogContent>
@@ -1075,222 +857,151 @@ const AdminPage = () => {
                 </div>
               ))}
             </div>
-          </CardContent>
-        </Card>
 
-        {/* Cascade delete confirmation */}
-        <AlertDialog open={cascadeConfirm.open} onOpenChange={(open) => setCascadeConfirm(prev => ({ ...prev, open }))}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Delete property and all related units?</AlertDialogTitle>
-              <AlertDialogDescription>
-                {cascadeConfirm.property ? (
-                  <>
-                    The property "{cascadeConfirm.property.Properties}" has {cascadeConfirm.unitsCount} related units. This action will permanently delete the property and all its units. This cannot be undone.
-                  </>
-                ) : null}
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction onClick={handleCascadeDeleteProperty}>Delete All</AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-
-        {/* View Property Dialog */}
-        <Dialog open={showViewPropertyDialog} onOpenChange={setShowViewPropertyDialog}>
-          <DialogContent className="w-[95vw] sm:max-w-xl">
-            <DialogHeader>
-              <DialogTitle>{viewProperty?.Properties || 'Property'}</DialogTitle>
-            </DialogHeader>
+            {/* Action Buttons */}
             <div className="space-y-3">
-              <div className="w-full h-56 rounded overflow-hidden bg-muted">
-                <img src={getImageUrl(viewProperty?.image_url, 'property')} alt={viewProperty?.Properties || 'Property'} className="w-full h-full object-cover" />
-              </div>
-              <p className="text-sm">Area: {viewProperty?.areas?.AreaName}</p>
-              <p className="text-sm">Address: {viewProperty?.addresses?.Address}</p>
-              <p className="text-sm">Map: {viewProperty?.PlusCode ? (
-                <a
-                  href={viewProperty.PlusCode.startsWith('http') ? viewProperty.PlusCode : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(viewProperty.addresses?.Address || '')}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="underline"
-                >
-                  Open in Google Maps
-                </a>
-              ) : '—'}</p>
-              <p className="text-sm">Description: {viewProperty?.Description}</p>
-            </div>
-          </DialogContent>
-        </Dialog>
-
-        {/* View Unit Dialog */}
-        <Dialog open={showViewUnitDialog} onOpenChange={setShowViewUnitDialog}>
-          <DialogContent className="w-[95vw] sm:max-w-xl">
-            <DialogHeader>
-              <DialogTitle>{viewUnit?.UnitName || 'Unit'}</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-3">
-              <div className="w-full h-56 rounded overflow-hidden bg-muted">
-                <img src={getImageUrl(viewUnit?.image_url, 'unit')} alt={viewUnit?.UnitName || 'Unit'} className="w-full h-full object-cover" />
-              </div>
-              <p className="text-sm">Property: {viewUnit?.properties?.Properties || `Property ${viewUnit?.PropertyID}`}</p>
-              <p className="text-sm">Monthly Price: £{viewUnit?.MonthlyPrice?.toLocaleString?.() || viewUnit?.MonthlyPrice}</p>
-              <p className="text-sm">Status: {viewUnit?.Available ? 'Available' : 'Occupied'}</p>
-              <p className="text-sm">Description: {viewUnit?.Description}</p>
-            </div>
-          </DialogContent>
-        </Dialog>
-
-        {/* Edit Property Dialog */}
-        <Dialog open={showEditPropertyDialog} onOpenChange={setShowEditPropertyDialog}>
-          <DialogContent className="w-[95vw] sm:max-w-2xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>Edit Property</DialogTitle>
-            </DialogHeader>
-            <form onSubmit={handleUpdateProperty} className="space-y-4 pr-2">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="editPropertyName">Property Name</Label>
-                  <Input
-                    id="editPropertyName"
-                    value={propertyForm.Properties}
-                    onChange={(e) => setPropertyForm(prev => ({ ...prev, Properties: e.target.value }))}
-                    placeholder="Property name"
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="editArea">Area</Label>
-                  <Select value={propertyForm.AreaID} onValueChange={(value) => setPropertyForm(prev => ({ ...prev, AreaID: value }))}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select area" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {areas.map((area) => (
-                        <SelectItem key={area.AreaID} value={area.AreaID.toString()}>
-                          {area.AreaName}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="editAddress">Address</Label>
-                <Select value={propertyForm.AddressID} onValueChange={(value) => setPropertyForm(prev => ({ ...prev, AddressID: value }))}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select address" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {addresses.map((address) => (
-                      <SelectItem key={address.AddressId} value={address.AddressId.toString()}>
-                        {address.Address}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="editPlusCode">Google Maps Link (or Plus Code)</Label>
-                <Input
-                  id="editPlusCode"
-                  value={propertyForm.PlusCode}
-                  onChange={(e) => setPropertyForm(prev => ({ ...prev, PlusCode: e.target.value }))}
-                  placeholder="https://maps.google.com/... or 9C4X+XF Bournemouth"
-                  required
-                />
-                <p className="text-xs text-muted-foreground">Store a Google Maps URL here for map navigation. Plus Codes are also supported.</p>
-              </div>
-              <ImageUpload
-                onImageSelect={handlePropertyImageSelect}
-                onImageRemove={handlePropertyImageRemove}
-                selectedImage={propertyImage}
-                previewUrl={propertyImagePreview}
-                type="property"
-                disabled={uploading}
-              />
-              <div className="space-y-2">
-                <Label htmlFor="editImages">Additional Images (JSON array)</Label>
-                <Textarea
-                  id="editImages"
-                  value={propertyForm.Images}
-                  onChange={(e) => setPropertyForm(prev => ({ ...prev, Images: e.target.value }))}
-                  placeholder='["image1.jpg", "image2.jpg"]'
-                  rows={3}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="editDescription">Description</Label>
-                <Textarea
-                  id="editDescription"
-                  value={propertyForm.Description}
-                  onChange={(e) => setPropertyForm(prev => ({ ...prev, Description: e.target.value }))}
-                  placeholder="Property description (max 500 characters)"
-                  rows={3}
-                />
-              </div>
-              <div className="flex justify-end gap-2 pt-4 border-t">
-                <Button type="button" variant="outline" onClick={() => setShowEditPropertyDialog(false)} disabled={uploading}>
-                  Cancel
-                </Button>
-                <Button type="submit" disabled={uploading}>
-                  {uploading ? "Updating..." : "Update Property"}
-                </Button>
-              </div>
-            </form>
-          </DialogContent>
-        </Dialog>
-
-        {/* Units Section */}
-        <Card className="shadow-medium border-none">
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle className="flex items-center gap-2">
-                <Home className="h-5 w-5" />
-                Units
-              </CardTitle>
-              <Dialog open={showUnitDialog} onOpenChange={setShowUnitDialog}>
+              <Dialog open={showPropertyDialog} onOpenChange={setShowPropertyDialog}>
                 <DialogTrigger asChild>
-                  <Button>
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add Unit
+                  <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 text-base font-medium">
+                    + Add New Property
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="w-[95vw] sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+                <DialogContent className="w-[95vw] max-w-md max-h-[90vh] overflow-y-auto">
                   <DialogHeader>
-                    <DialogTitle>Add New Unit</DialogTitle>
+                    <DialogTitle className="text-lg font-semibold">Add a new property</DialogTitle>
                   </DialogHeader>
                   <div className="space-y-4 pr-2">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {/* Area Selection */}
+                    <div className="space-y-3">
+                      <Label className="text-sm font-medium text-gray-700">Area</Label>
                       <div className="space-y-2">
-                        <Label htmlFor="unitName">Unit Name</Label>
-                        <Input
-                          id="unitName"
-                          value={unitForm.UnitName}
-                          onChange={(e) => setUnitForm(prev => ({ ...prev, UnitName: e.target.value }))}
-                          placeholder="Flat 1, Unit A, etc."
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="property">Property</Label>
-                        <Select value={unitForm.PropertyID} onValueChange={(value) => setUnitForm(prev => ({ ...prev, PropertyID: value }))}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select property" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {properties.map((property) => (
-                              <SelectItem key={property.PropertyID} value={property.PropertyID.toString()}>
-                                {property.Properties || `Property ${property.PropertyID}`}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        {areas.map((area) => (
+                          <div key={area.AreaID} className="flex items-center">
+                            <input
+                              type="radio"
+                              id={`area-${area.AreaID}`}
+                              name="area"
+                              value={area.AreaID}
+                              checked={propertyForm.AreaID === area.AreaID.toString()}
+                              onChange={(e) => setPropertyForm(prev => ({ ...prev, AreaID: e.target.value }))}
+                              className="mr-3"
+                            />
+                            <Label htmlFor={`area-${area.AreaID}`} className="text-sm text-gray-700">
+                              {area.AreaName}
+                            </Label>
+                          </div>
+                        ))}
                       </div>
                     </div>
+
+                    {/* Address */}
                     <div className="space-y-2">
-                      <Label htmlFor="monthlyPrice">Monthly Price (£)</Label>
+                      <Label htmlFor="address" className="text-sm font-medium text-gray-700">Address</Label>
+                      <Input
+                        id="address"
+                        value={propertyForm.AddressID ? addresses.find(a => a.AddressId.toString() === propertyForm.AddressID)?.Address || '' : ''}
+                        onChange={(e) => {
+                          const address = addresses.find(a => a.Address === e.target.value);
+                          if (address) {
+                            setPropertyForm(prev => ({ ...prev, AddressID: address.AddressId.toString() }));
+                          }
+                        }}
+                        placeholder="Enter property address"
+                        className="bg-gray-50 border-gray-200"
+                      />
+                    </div>
+
+                    {/* Plus Code */}
+                    <div className="space-y-2">
+                      <Label htmlFor="plusCode" className="text-sm font-medium text-gray-700">+ Code</Label>
+                      <Input
+                        id="plusCode"
+                        value={propertyForm.PlusCode}
+                        onChange={(e) => setPropertyForm(prev => ({ ...prev, PlusCode: e.target.value }))}
+                        placeholder="JG5W+PG Weymouth"
+                        className="bg-gray-50 border-gray-200"
+                      />
+                    </div>
+
+                    {/* Description */}
+                    <div className="space-y-2">
+                      <Label htmlFor="description" className="text-sm font-medium text-gray-700">Description</Label>
+                      <Textarea
+                        id="description"
+                        value={propertyForm.Description}
+                        onChange={(e) => setPropertyForm(prev => ({ ...prev, Description: e.target.value }))}
+                        placeholder="Newly refurbished studio flats in an old Victorian building on the outskirts of Westbourne. Suitable for pets. Quiet building."
+                        rows={4}
+                        className="bg-gray-50 border-gray-200"
+                      />
+                    </div>
+
+                    {/* Multi-image Upload */}
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium text-gray-700">Upload Photos (max 5 photos)</Label>
+                      <MultiImageUpload
+                        value={propertyImagesFiles}
+                        onChange={setPropertyImagesFiles}
+                        type="property"
+                        disabled={uploading}
+                      />
+                    </div>
+
+                    <div className="flex justify-end gap-2 pt-4 border-t">
+                      <Button variant="outline" onClick={() => setShowPropertyDialog(false)} disabled={uploading}>
+                        Cancel
+                      </Button>
+                      <Button onClick={handleAddProperty} disabled={uploading} className="bg-yellow-500 hover:bg-yellow-600 text-black font-medium">
+                        {uploading ? "Saving..." : "Save this Property"}
+                      </Button>
+                    </div>
+                  </div>
+                </DialogContent>
+              </Dialog>
+
+              <Dialog open={showUnitDialog} onOpenChange={setShowUnitDialog}>
+                <DialogTrigger asChild>
+                  <Button className="w-full bg-green-600 hover:bg-green-700 text-white py-3 text-base font-medium">
+                    + Add New Unit
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="w-[95vw] max-w-md max-h-[90vh] overflow-y-auto">
+                  <DialogHeader>
+                    <DialogTitle className="text-lg font-semibold">Add a new unit</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-4 pr-2">
+                    {/* Unit Name */}
+                    <div className="space-y-2">
+                      <Label htmlFor="unitName" className="text-sm font-medium text-gray-700">Unit name</Label>
+                      <Input
+                        id="unitName"
+                        value={unitForm.UnitName}
+                        onChange={(e) => setUnitForm(prev => ({ ...prev, UnitName: e.target.value }))}
+                        placeholder="Flat 1"
+                        className="bg-gray-50 border-gray-200"
+                      />
+                    </div>
+
+                    {/* Property Selection */}
+                    <div className="space-y-2">
+                      <Label htmlFor="property" className="text-sm font-medium text-gray-700">Property</Label>
+                      <Select value={unitForm.PropertyID} onValueChange={(value) => setUnitForm(prev => ({ ...prev, PropertyID: value }))}>
+                        <SelectTrigger className="bg-gray-50 border-gray-200">
+                          <SelectValue placeholder="Select property" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {properties.map((property) => (
+                            <SelectItem key={property.PropertyID} value={property.PropertyID.toString()}>
+                              {property.addresses?.Address || property.Properties || `Property ${property.PropertyID}`}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Monthly Price */}
+                    <div className="space-y-2">
+                      <Label htmlFor="monthlyPrice" className="text-sm font-medium text-gray-700">Monthly price</Label>
                       <Input
                         id="monthlyPrice"
                         type="number"
@@ -1298,212 +1009,313 @@ const AdminPage = () => {
                         onChange={(e) => setUnitForm(prev => ({ ...prev, MonthlyPrice: e.target.value }))}
                         placeholder="820.00"
                         step="0.01"
+                        className="bg-gray-50 border-gray-200"
                       />
                     </div>
-                    <ImageUpload
-                      onImageSelect={handleUnitImageSelect}
-                      onImageRemove={handleUnitImageRemove}
-                      selectedImage={unitImage}
-                      previewUrl={unitImagePreview}
-                      type="unit"
-                      disabled={uploading}
-                    />
-                    <div className="space-y-2">
-                      <Label htmlFor="images">Additional Images (JSON array)</Label>
-                      <Textarea
-                        id="images"
-                        value={unitForm.Images}
-                        onChange={(e) => setUnitForm(prev => ({ ...prev, Images: e.target.value }))}
-                        placeholder='["image1.jpg", "image2.jpg"]'
-                        rows={3}
-                      />
+
+                    {/* Available */}
+                    <div className="space-y-3">
+                      <Label className="text-sm font-medium text-gray-700">Available</Label>
+                      <div className="space-y-2">
+                        <div className="flex items-center">
+                          <input
+                            type="radio"
+                            id="available-yes"
+                            name="available"
+                            value="true"
+                            checked={unitForm.Available === true}
+                            onChange={() => setUnitForm(prev => ({ ...prev, Available: true }))}
+                            className="mr-3"
+                          />
+                          <Label htmlFor="available-yes" className="text-sm text-gray-700">Yes</Label>
+                        </div>
+                        <div className="flex items-center">
+                          <input
+                            type="radio"
+                            id="available-no"
+                            name="available"
+                            value="false"
+                            checked={unitForm.Available === false}
+                            onChange={() => setUnitForm(prev => ({ ...prev, Available: false }))}
+                            className="mr-3"
+                          />
+                          <Label htmlFor="available-no" className="text-sm text-gray-700">No</Label>
+                        </div>
+                      </div>
                     </div>
+
+                    {/* Description */}
                     <div className="space-y-2">
-                      <Label htmlFor="description">Description</Label>
+                      <Label htmlFor="unitDescription" className="text-sm font-medium text-gray-700">Description</Label>
                       <Textarea
-                        id="description"
+                        id="unitDescription"
                         value={unitForm.Description}
                         onChange={(e) => setUnitForm(prev => ({ ...prev, Description: e.target.value }))}
-                        placeholder="Unit description (max 1000 characters)"
-                        rows={3}
+                        placeholder="Beautiful double bed studio flat with wetroom shower room and separate bed area. This flat is available on a flexible 3 month lease. There is NO DEPOSIT required."
+                        rows={4}
+                        className="bg-gray-50 border-gray-200"
                       />
                     </div>
+
+                    {/* Multi-image Upload */}
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium text-gray-700">Upload Photos (max 5 photos)</Label>
+                      <MultiImageUpload
+                        value={unitImagesFiles}
+                        onChange={setUnitImagesFiles}
+                        type="unit"
+                        disabled={uploading}
+                      />
+                    </div>
+
                     <div className="flex justify-end gap-2 pt-4 border-t">
                       <Button variant="outline" onClick={() => setShowUnitDialog(false)} disabled={uploading}>
                         Cancel
                       </Button>
-                      <Button onClick={handleAddUnit} disabled={uploading}>
-                        {uploading ? "Adding..." : "Add Unit"}
+                      <Button onClick={handleAddUnit} disabled={uploading} className="bg-yellow-500 hover:bg-yellow-600 text-black font-medium">
+                        {uploading ? "Saving..." : "Save this Unit"}
                       </Button>
                     </div>
                   </div>
                 </DialogContent>
               </Dialog>
             </div>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {units.map((unit) => (
-                <div key={unit.UnitID} className="flex flex-col sm:flex-row sm:items-center gap-4 p-4 border rounded-lg">
-                  <div className="w-full sm:w-20 h-40 sm:h-20 rounded-lg overflow-hidden bg-muted flex-shrink-0">
-                    <img
-                      src={getImageUrl(unit.image_url, 'unit')}
-                      alt={unit.UnitName}
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                  <div className="flex-1 space-y-1">
-                    <h3 className="font-semibold">{unit.UnitName}</h3>
-                    <p className="text-sm text-muted-foreground">{unit.properties?.Properties || `Property ${unit.PropertyID}`}</p>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium">£{unit.MonthlyPrice.toLocaleString()}/month</span>
-                      <Badge variant={unit.Available ? "default" : "secondary"}>
-                        {unit.Available ? "Available" : "Occupied"}
-                      </Badge>
-                    </div>
-                  </div>
-                  <div className="flex flex-wrap justify-end sm:justify-start gap-2 w-full sm:w-auto">
-                    <Button variant="outline" size="sm" onClick={() => handleViewUnit(unit)}>
-                      <Eye className="h-4 w-4" />
-                    </Button>
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      onClick={() => handleEditUnit(unit)}
-                    >
-                      <Edit className="h-4 w-4" />
-                    </Button>
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button variant="outline" size="sm">
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Are you sure you want to delete this unit?</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            This action cannot be undone. This will permanently delete the unit.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancel</AlertDialogCancel>
-                          <AlertDialogAction onClick={() => handleDeleteUnit(unit.UnitID)}>
-                            Delete
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Edit Unit Dialog */}
-        <Dialog open={showEditUnitDialog} onOpenChange={setShowEditUnitDialog}>
-          <DialogContent className="w-[95vw] sm:max-w-2xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>Edit Unit</DialogTitle>
-            </DialogHeader>
-            <form onSubmit={handleUpdateUnit} className="space-y-4 pr-2">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="editUnitName">Unit Name</Label>
-                  <Input
-                    id="editUnitName"
-                    value={unitForm.UnitName}
-                    onChange={(e) => setUnitForm(prev => ({ ...prev, UnitName: e.target.value }))}
-                    placeholder="Flat 1, Unit A, etc."
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="editProperty">Property</Label>
-                  <Select value={unitForm.PropertyID} onValueChange={(value) => setUnitForm(prev => ({ ...prev, PropertyID: value }))}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select property" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {properties.map((property) => (
-                        <SelectItem key={property.PropertyID} value={property.PropertyID.toString()}>
-                          {property.Properties || `Property ${property.PropertyID}`}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="editMonthlyPrice">Monthly Price (£)</Label>
-                <Input
-                  id="editMonthlyPrice"
-                  type="number"
-                  value={unitForm.MonthlyPrice}
-                  onChange={(e) => setUnitForm(prev => ({ ...prev, MonthlyPrice: e.target.value }))}
-                  placeholder="820.00"
-                  step="0.01"
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="editAvailable">Availability</Label>
-                <Select 
-                  value={unitForm.Available.toString()} 
-                  onValueChange={(value) => setUnitForm(prev => ({ ...prev, Available: value === 'true' }))}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select availability" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="true">Available</SelectItem>
-                    <SelectItem value="false">Occupied</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <ImageUpload
-                onImageSelect={handleUnitImageSelect}
-                onImageRemove={handleUnitImageRemove}
-                selectedImage={unitImage}
-                previewUrl={unitImagePreview}
-                type="unit"
-                disabled={uploading}
-              />
-              <div className="space-y-2">
-                <Label htmlFor="editUnitImages">Additional Images (JSON array)</Label>
-                <Textarea
-                  id="editUnitImages"
-                  value={unitForm.Images}
-                  onChange={(e) => setUnitForm(prev => ({ ...prev, Images: e.target.value }))}
-                  placeholder='["image1.jpg", "image2.jpg"]'
-                  rows={3}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="editUnitDescription">Description</Label>
-                <Textarea
-                  id="editUnitDescription"
-                  value={unitForm.Description}
-                  onChange={(e) => setUnitForm(prev => ({ ...prev, Description: e.target.value }))}
-                  placeholder="Unit description (max 1000 characters)"
-                  rows={3}
-                />
-              </div>
-              <div className="flex justify-end gap-2 pt-4 border-t">
-                <Button type="button" variant="outline" onClick={() => setShowEditUnitDialog(false)} disabled={uploading}>
-                  Cancel
-                </Button>
-                <Button type="submit" disabled={uploading}>
-                  {uploading ? "Updating..." : "Update Unit"}
-                </Button>
-              </div>
-            </form>
-          </DialogContent>
-        </Dialog>
           </>
         )}
       </main>
+
+      {/* Edit Property Dialog */}
+      <Dialog open={showEditPropertyDialog} onOpenChange={setShowEditPropertyDialog}>
+        <DialogContent className="w-[95vw] max-w-md max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-semibold">Edit Property</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleUpdateProperty} className="space-y-4 pr-2">
+            {/* Area Selection */}
+            <div className="space-y-3">
+              <Label className="text-sm font-medium text-gray-700">Area</Label>
+              <div className="space-y-2">
+                {areas.map((area) => (
+                  <div key={area.AreaID} className="flex items-center">
+                    <input
+                      type="radio"
+                      id={`edit-area-${area.AreaID}`}
+                      name="edit-area"
+                      value={area.AreaID}
+                      checked={propertyForm.AreaID === area.AreaID.toString()}
+                      onChange={(e) => setPropertyForm(prev => ({ ...prev, AreaID: e.target.value }))}
+                      className="mr-3"
+                    />
+                    <Label htmlFor={`edit-area-${area.AreaID}`} className="text-sm text-gray-700">
+                      {area.AreaName}
+                    </Label>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Address */}
+            <div className="space-y-2">
+              <Label htmlFor="editAddress" className="text-sm font-medium text-gray-700">Address</Label>
+              <Input
+                id="editAddress"
+                value={propertyForm.AddressID ? addresses.find(a => a.AddressId.toString() === propertyForm.AddressID)?.Address || '' : ''}
+                onChange={(e) => {
+                  const address = addresses.find(a => a.Address === e.target.value);
+                  if (address) {
+                    setPropertyForm(prev => ({ ...prev, AddressID: address.AddressId.toString() }));
+                  }
+                }}
+                placeholder="Enter property address"
+                className="bg-gray-50 border-gray-200"
+                required
+              />
+            </div>
+
+            {/* Plus Code */}
+            <div className="space-y-2">
+              <Label htmlFor="editPlusCode" className="text-sm font-medium text-gray-700">+ Code</Label>
+              <Input
+                id="editPlusCode"
+                value={propertyForm.PlusCode}
+                onChange={(e) => setPropertyForm(prev => ({ ...prev, PlusCode: e.target.value }))}
+                placeholder="JG5W+PG Weymouth"
+                className="bg-gray-50 border-gray-200"
+              />
+            </div>
+
+            {/* Description */}
+            <div className="space-y-2">
+              <Label htmlFor="editDescription" className="text-sm font-medium text-gray-700">Description</Label>
+              <Textarea
+                id="editDescription"
+                value={propertyForm.Description}
+                onChange={(e) => setPropertyForm(prev => ({ ...prev, Description: e.target.value }))}
+                placeholder="Property description"
+                rows={4}
+                className="bg-gray-50 border-gray-200"
+              />
+            </div>
+
+            {/* Multi-image Upload */}
+            <div className="space-y-2">
+              <Label className="text-sm font-medium text-gray-700">Upload Photos (max 5 photos)</Label>
+              <MultiImageUpload
+                value={propertyImagesFiles}
+                onChange={setPropertyImagesFiles}
+                type="property"
+                disabled={uploading}
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 pt-4 border-t">
+              <Button type="button" variant="outline" onClick={() => setShowEditPropertyDialog(false)} disabled={uploading}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={uploading} className="bg-yellow-500 hover:bg-yellow-600 text-black font-medium">
+                {uploading ? "Updating..." : "Update Property"}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Unit Dialog */}
+      <Dialog open={showEditUnitDialog} onOpenChange={setShowEditUnitDialog}>
+        <DialogContent className="w-[95vw] max-w-md max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-semibold">Edit Unit</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleUpdateUnit} className="space-y-4 pr-2">
+            {/* Unit Name */}
+            <div className="space-y-2">
+              <Label htmlFor="editUnitName" className="text-sm font-medium text-gray-700">Unit name</Label>
+              <Input
+                id="editUnitName"
+                value={unitForm.UnitName}
+                onChange={(e) => setUnitForm(prev => ({ ...prev, UnitName: e.target.value }))}
+                placeholder="Flat 1"
+                className="bg-gray-50 border-gray-200"
+                required
+              />
+            </div>
+
+            {/* Property Selection */}
+            <div className="space-y-2">
+              <Label htmlFor="editProperty" className="text-sm font-medium text-gray-700">Property</Label>
+              <Select value={unitForm.PropertyID} onValueChange={(value) => setUnitForm(prev => ({ ...prev, PropertyID: value }))}>
+                <SelectTrigger className="bg-gray-50 border-gray-200">
+                  <SelectValue placeholder="Select property" />
+                </SelectTrigger>
+                <SelectContent>
+                  {properties.map((property) => (
+                    <SelectItem key={property.PropertyID} value={property.PropertyID.toString()}>
+                      {property.addresses?.Address || property.Properties || `Property ${property.PropertyID}`}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Monthly Price */}
+            <div className="space-y-2">
+              <Label htmlFor="editMonthlyPrice" className="text-sm font-medium text-gray-700">Monthly price</Label>
+              <Input
+                id="editMonthlyPrice"
+                type="number"
+                value={unitForm.MonthlyPrice}
+                onChange={(e) => setUnitForm(prev => ({ ...prev, MonthlyPrice: e.target.value }))}
+                placeholder="820.00"
+                step="0.01"
+                className="bg-gray-50 border-gray-200"
+                required
+              />
+            </div>
+
+            {/* Available */}
+            <div className="space-y-3">
+              <Label className="text-sm font-medium text-gray-700">Available</Label>
+              <div className="space-y-2">
+                <div className="flex items-center">
+                  <input
+                    type="radio"
+                    id="edit-available-yes"
+                    name="edit-available"
+                    value="true"
+                    checked={unitForm.Available === true}
+                    onChange={() => setUnitForm(prev => ({ ...prev, Available: true }))}
+                    className="mr-3"
+                  />
+                  <Label htmlFor="edit-available-yes" className="text-sm text-gray-700">Yes</Label>
+                </div>
+                <div className="flex items-center">
+                  <input
+                    type="radio"
+                    id="edit-available-no"
+                    name="edit-available"
+                    value="false"
+                    checked={unitForm.Available === false}
+                    onChange={() => setUnitForm(prev => ({ ...prev, Available: false }))}
+                    className="mr-3"
+                  />
+                  <Label htmlFor="edit-available-no" className="text-sm text-gray-700">No</Label>
+                </div>
+              </div>
+            </div>
+
+            {/* Description */}
+            <div className="space-y-2">
+              <Label htmlFor="editUnitDescription" className="text-sm font-medium text-gray-700">Description</Label>
+              <Textarea
+                id="editUnitDescription"
+                value={unitForm.Description}
+                onChange={(e) => setUnitForm(prev => ({ ...prev, Description: e.target.value }))}
+                placeholder="Unit description"
+                rows={4}
+                className="bg-gray-50 border-gray-200"
+              />
+            </div>
+
+            {/* Multi-image Upload */}
+            <div className="space-y-2">
+              <Label className="text-sm font-medium text-gray-700">Upload Photos (max 5 photos)</Label>
+              <MultiImageUpload
+                value={unitImagesFiles}
+                onChange={setUnitImagesFiles}
+                type="unit"
+                disabled={uploading}
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 pt-4 border-t">
+              <Button type="button" variant="outline" onClick={() => setShowEditUnitDialog(false)} disabled={uploading}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={uploading} className="bg-yellow-500 hover:bg-yellow-600 text-black font-medium">
+                {uploading ? "Updating..." : "Update Unit"}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Cascade Delete Confirmation */}
+      <AlertDialog open={cascadeConfirm.open} onOpenChange={(open) => setCascadeConfirm(prev => ({ ...prev, open }))}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Property and All Units?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This property has {cascadeConfirm.unitsCount} related units. Deleting the property will also delete all {cascadeConfirm.unitsCount} units. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => cascadeConfirm.property && handleCascadeDeleteProperty(cascadeConfirm.property)}>
+              Delete All
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

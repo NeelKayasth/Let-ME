@@ -102,8 +102,8 @@ const UnitPage = () => {
       {/* import-less usage since component is local */}
       
       <main>
-        {/* Unit Header */}
-        <section className="bg-gradient-to-br from-primary to-[hsl(var(--hero-gradient-to))] text-primary-foreground py-10 md:py-24">
+        {/* Unit Header - hide on mobile, show on desktop */}
+        <section className="hidden md:block bg-gradient-to-br from-primary to-[hsl(var(--hero-gradient-to))] text-primary-foreground py-10 md:py-24">
           <div className="container mx-auto px-4">
             <div className="max-w-4xl mx-auto space-y-6 animate-fade-in">
               <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/20 backdrop-blur-sm rounded-full">
@@ -156,6 +156,17 @@ const UnitPage = () => {
             </div>
           </div>
         </section>
+
+        {/* Mobile breadcrumb bar */}
+        <div className="md:hidden border-y border-black bg-black sticky top-[64px] z-30">
+          <div className="container mx-auto px-4 py-2 text-sm text-white">
+            <Link to="/" className="underline text-white">To Let</Link>
+            <span className="mx-1 opacity-80">/</span>
+            <span className="font-medium">{property.areas?.AreaName}</span>
+            <span className="mx-1 opacity-80">/</span>
+            <span className="font-medium">{unit.UnitName}</span>
+          </div>
+        </div>
 
         {/* Unit Images */}
         <section className="py-6 md:py-8 bg-background">

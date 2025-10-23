@@ -104,15 +104,37 @@ const PortsmouthPage = () => {
                         className="overflow-hidden shadow-medium hover:shadow-large transition-all duration-300 hover:scale-105 border-none"
                       >
                         <div className="relative h-64 overflow-hidden">
+                          {/* Primary Image */}
                           <img
                             src={getImageUrl(property.image_url, 'property')}
                             alt={property.Properties || 'Property'}
                             className="w-full h-full object-cover transition-transform duration-300 hover:scale-110"
                             onError={(e) => {
-                              // Fallback to default image if the current one fails to load
                               e.currentTarget.src = getImageUrl(null, 'property');
                             }}
                           />
+                          
+                          {/* Additional Images Overlay */}
+                          {property.Images && JSON.parse(property.Images).length > 0 && (
+                            <div className="absolute bottom-2 right-2 flex gap-1">
+                              {JSON.parse(property.Images).slice(0, 3).map((image: string, index: number) => (
+                                <div key={index} className="w-8 h-8 rounded border border-white overflow-hidden">
+                                  <img
+                                    src={image}
+                                    alt={`Additional ${index + 1}`}
+                                    className="w-full h-full object-cover"
+                                    onError={(e) => { e.currentTarget.src = getImageUrl(null, 'property'); }}
+                                  />
+                                </div>
+                              ))}
+                              {JSON.parse(property.Images).length > 3 && (
+                                <div className="w-8 h-8 rounded border border-white bg-black bg-opacity-50 flex items-center justify-center">
+                                  <span className="text-white text-xs font-bold">+{JSON.parse(property.Images).length - 3}</span>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                          
                           {(property.availableCount || 0) > 0 && (
                             <div className="absolute top-4 right-4">
                               <Badge className="bg-accent text-accent-foreground shadow-medium">

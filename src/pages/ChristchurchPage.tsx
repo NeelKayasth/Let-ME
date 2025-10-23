@@ -65,19 +65,24 @@ const ChristchurchPage = () => {
       <MobileBackBar />
       
       <main>
-        {/* Header Section */}
-        <section className="bg-gradient-to-br from-primary to-[hsl(var(--hero-gradient-to))] text-primary-foreground py-10 md:py-24">
+        {/* Desktop hero; hidden on mobile for compact layout */}
+        <section className="hidden md:block bg-gradient-to-br from-primary to-[hsl(var(--hero-gradient-to))] text-primary-foreground py-10 md:py-24">
           <div className="container mx-auto px-4">
             <div className="max-w-3xl mx-auto text-center space-y-4 animate-fade-in">
-              <h1 className="font-heading text-3xl md:text-5xl lg:text-6xl font-bold">
-                Christchurch
-              </h1>
-              <p className="text-sm md:text-xl text-primary-foreground/90">
-                Explore our properties in the historic town of Christchurch
-              </p>
+              <h1 className="font-heading text-3xl md:text-5xl lg:text-6xl font-bold">Christchurch</h1>
+              <p className="text-sm md:text-xl text-primary-foreground/90">Explore our properties in the historic town of Christchurch</p>
             </div>
           </div>
         </section>
+
+        {/* Mobile breadcrumb bar */}
+        <div className="md:hidden border-y border-black bg-black sticky top-[64px] z-30">
+          <div className="container mx-auto px-4 py-2 text-sm text-white">
+            <Link to="/" className="underline text-white">To Let</Link>
+            <span className="mx-1 opacity-80">/</span>
+            <span className="font-medium">Christchurch</span>
+          </div>
+        </div>
 
         {/* Properties Grid */}
         <section className="py-10 md:py-24 bg-background">
@@ -114,12 +119,35 @@ const ChristchurchPage = () => {
                           </div>
 
                           <div className="relative h-40 md:h-64 overflow-hidden">
+                            {/* Primary Image */}
                             <img
                               src={getImageUrl(property.image_url, 'property')}
                               alt={property.Properties || 'Property'}
                               className="w-full h-full object-cover"
                               onError={(e) => { e.currentTarget.src = getImageUrl(null, 'property'); }}
                             />
+                            
+                            {/* Additional Images Overlay */}
+                            {property.Images && JSON.parse(property.Images).length > 0 && (
+                              <div className="absolute bottom-2 right-2 flex gap-1">
+                                {JSON.parse(property.Images).slice(0, 3).map((image: string, index: number) => (
+                                  <div key={index} className="w-8 h-8 rounded border border-white overflow-hidden">
+                                    <img
+                                      src={image}
+                                      alt={`Additional ${index + 1}`}
+                                      className="w-full h-full object-cover"
+                                      onError={(e) => { e.currentTarget.src = getImageUrl(null, 'property'); }}
+                                    />
+                                  </div>
+                                ))}
+                                {JSON.parse(property.Images).length > 3 && (
+                                  <div className="w-8 h-8 rounded border border-white bg-black bg-opacity-50 flex items-center justify-center">
+                                    <span className="text-white text-xs font-bold">+{JSON.parse(property.Images).length - 3}</span>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                            
                             {(property.availableCount || 0) > 0 && (
                               <div className="hidden md:block absolute top-4 right-4">
                                 <Badge className="bg-accent text-accent-foreground shadow-medium">
